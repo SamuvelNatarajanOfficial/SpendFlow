@@ -1,6 +1,15 @@
 import { allowedGoogleEmail, googleClientId, googleOAuthScopes } from './config';
 import { isAllowedEmail } from './authorization';
 
+// DIAGNOSTIC (temporary): the error branches below log the raw GIS error
+// object to the console and surface its `type`/`message` on screen, so a
+// real failure can be identified precisely (e.g. "popup_closed" vs
+// "popup_failed_to_open" vs an OAuth error) without needing to reproduce it
+// alongside someone with DevTools access. None of this logs tokens, emails,
+// or secrets — only Google's own error type/message strings. Safe to leave,
+// but intended to be trimmed back to plain friendly copy once the root
+// cause is confirmed from real output.
+
 export type AuthStatus =
   'idle' | 'authenticating' | 'authorized' | 'denied' | 'signed-out' | 'error';
 
@@ -89,9 +98,10 @@ function revokeCurrentToken(): void {
 
 async function handleTokenResponse(response: GoogleTokenResponse): Promise<void> {
   if (response.error) {
+    console.error('[SpendFlow] Google token callback returned an error:', response);
     setState({
       status: 'error',
-      error: response.error_description ?? 'Google sign-in failed.',
+      error: `${response.error}: ${response.error_description ?? 'Google sign-in failed.'}`,
     });
     return;
   }
@@ -109,6 +119,7 @@ async function handleTokenResponse(response: GoogleTokenResponse): Promise<void>
 
     setState({ status: 'authorized', email, error: null });
   } catch (cause) {
+    console.error('[SpendFlow] Error after receiving a token:', cause);
     revokeCurrentToken();
     setState({
       status: 'error',
@@ -149,9 +160,14 @@ export async function initAuth(): Promise<void> {
       void handleTokenResponse(response);
     },
     error_callback: (error) => {
+      console.error('[SpendFlow] Google token client error_callback fired:', error);
       setState({
         status: 'signed-out',
-        error: error.message ?? 'Google sign-in was cancelled.',
+        // Surfacing the raw `type` on screen (not just a generic fallback)
+        // so we can tell exactly which GIS error this is without needing
+        // DevTools open — e.g. "popup_closed" vs "popup_failed_to_open" vs
+        // something else entirely point to very different root causes.
+        error: `Google sign-in error (${error.type}): ${error.message ?? 'no message'}`,
       });
     },
   });

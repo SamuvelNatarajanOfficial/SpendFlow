@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter } from 'react-router-dom';
+import { HashRouter } from 'react-router-dom';
 import './index.css';
 import App from './App.tsx';
 import { AuthProvider } from './context/AuthProvider';
@@ -8,12 +8,15 @@ import { AuthGate } from './components/auth/AuthGate';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <BrowserRouter basename={import.meta.env.BASE_URL}>
+    {/* No `basename` here — GitHub Pages already serves the app at /spendflow/
+        via Vite's `base` config; HashRouter's basename would apply *inside*
+        the hash fragment instead, which isn't what we want. */}
+    <HashRouter>
       <AuthProvider>
         <AuthGate>
           <App />
         </AuthGate>
       </AuthProvider>
-    </BrowserRouter>
+    </HashRouter>
   </StrictMode>,
 );

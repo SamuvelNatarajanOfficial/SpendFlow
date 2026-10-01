@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Plus } from 'lucide-react';
 import { MonthSelector } from '../components/dashboard/MonthSelector';
 import { ExpenseList } from '../components/shared/ExpenseList';
@@ -6,7 +7,6 @@ import { EmptyState } from '../components/shared/EmptyState';
 import { AddExtraItemModal } from '../components/shared/AddExtraItemModal';
 import { Skeleton } from '../components/ui/Skeleton';
 import { Button } from '../components/ui/Button';
-import { FloatingActionButton } from '../components/ui/FloatingActionButton';
 import { useMonthNavigation } from '../hooks/useMonthNavigation';
 import { useMonthData } from '../hooks/useMonthData';
 import { getMonthLabel } from '../services/financeEngine/month';
@@ -19,8 +19,23 @@ import {
 export function Extra() {
   const { monthId, goToPrevious, goToNext } = useMonthNavigation();
   const { data, isLoading, error, reload } = useMonthData(monthId);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  // The mobile bottom nav's central "Add" button navigates here with this
+  // state flag so the form opens immediately instead of requiring a second
+  // tap — read once, synchronously, as the initial state (no effect needed).
+  const [isModalOpen, setIsModalOpen] = useState(() =>
+    Boolean((location.state as { openAddModal?: boolean } | null)?.openAddModal),
+  );
   const monthLabel = getMonthLabel(monthId);
+
+  // Clear the one-shot nav state via `replace` so back/forward navigation
+  // doesn't reopen the modal unexpectedly.
+  useEffect(() => {
+    if ((location.state as { openAddModal?: boolean } | null)?.openAddModal) {
+      navigate(location.pathname, { replace: true });
+    }
+  }, [location, navigate]);
 
   async function toggle(id: string, isPaid: boolean) {
     if (isPaid) {
@@ -101,8 +116,6 @@ export function Extra() {
           reload();
         }}
       />
-
-      <FloatingActionButton label="Add Extra" onClick={() => setIsModalOpen(true)} />
     </div>
   );
 }

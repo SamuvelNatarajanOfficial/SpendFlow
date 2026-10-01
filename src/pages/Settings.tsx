@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
+import { InstallPwaSection } from '../components/shared/InstallPwaSection';
 import { useAuth } from '../context/AuthContext';
 import { settingsRepository } from '../services/googleSheets/repositories/settingsRepository';
 import { getFriendlyErrorMessage } from '../services/googleSheets/errors';
@@ -71,6 +72,11 @@ export function Settings() {
             </span>
           )}
         </div>
+      </section>
+
+      <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-sm">
+        <h2 className="text-base font-semibold text-text">Install App</h2>
+        <InstallPwaSection />
       </section>
 
       <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-sm">

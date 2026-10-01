@@ -95,7 +95,7 @@ describe('Dashboard', () => {
     render(<Dashboard />);
 
     expect(await screen.findAllByText('Home Loan')).not.toHaveLength(0);
-    expect(screen.getByText('Weekend Trip')).toBeInTheDocument();
+    expect(screen.getAllByText('Weekend Trip').length).toBeGreaterThan(0);
     expect(screen.getAllByText('₹50,000').length).toBeGreaterThan(0);
     expect(screen.getByText('Overdue / Still Not Completed')).toBeInTheDocument();
   });
@@ -105,8 +105,10 @@ describe('Dashboard', () => {
     render(<Dashboard />);
 
     await screen.findAllByText('Home Loan');
-    // The item appears both in the Regular list and the Overdue section.
-    expect(screen.getAllByText('Home Loan').length).toBe(2);
+    // The item appears in both the Regular list and the Overdue section,
+    // and ExpenseRow itself renders a mobile card + a desktop row for each
+    // (one is always CSS-hidden in a real browser) — 2 sections x 2 layouts.
+    expect(screen.getAllByText('Home Loan').length).toBe(4);
   });
 
   it('shows a positive empty state when nothing is overdue', async () => {
@@ -115,7 +117,7 @@ describe('Dashboard', () => {
     loadMonth.mockResolvedValue(data);
     render(<Dashboard />);
 
-    await screen.findByText('Home Loan');
+    await screen.findAllByText('Home Loan');
     expect(screen.getByText('Nothing overdue')).toBeInTheDocument();
   });
 
@@ -136,8 +138,11 @@ describe('Dashboard', () => {
     markExtraItemPending.mockResolvedValue({});
     render(<Dashboard />);
 
-    await screen.findByText('Weekend Trip');
-    await userEvent.click(screen.getByRole('button', { name: 'Mark Pending' }));
+    await screen.findAllByText('Weekend Trip');
+    const [firstMarkPendingButton] = screen.getAllByRole('button', {
+      name: 'Mark Pending',
+    });
+    await userEvent.click(firstMarkPendingButton);
 
     expect(markExtraItemPending).toHaveBeenCalledWith('extra-1');
   });

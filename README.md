@@ -37,7 +37,10 @@ third-party server.
   completion percentages, and two lightweight breakdown charts.
 - **Full preset CRUD** — create, edit, deactivate (never hard-deleted, since
   historical months may still reference a preset).
-- **Mobile, tablet, and desktop layouts** from one responsive codebase.
+- **Mobile, tablet, and desktop layouts** from one responsive codebase —
+  purpose-built mobile cards and bottom navigation, not a shrunk desktop UI.
+- **Installable PWA.** Add SpendFlow to your phone's home screen for a
+  full-screen, app-like launch — same app, same URL, no app store.
 - **No backend.** Static React app + Google Sheets API + Google Identity
   Services. Deploys as plain static files.
 
@@ -88,6 +91,7 @@ or the Sheets client directly.
 | Data    | Google Sheets API v4                                       |
 | Quality | ESLint (flat config) + Prettier                            |
 | Testing | Vitest + Testing Library                                   |
+| PWA     | `vite-plugin-pwa` (Workbox-generated service worker)       |
 | Hosting | GitHub Pages, deployed via GitHub Actions                  |
 
 ## 5. Google Cloud Setup
@@ -285,6 +289,62 @@ Make sure your local `node_modules` is up to date (`npm ci`, not `npm
 install`, matches what CI runs) and that you're not relying on a locally
 installed global tool version.
 
+**PWA install option isn't showing / manifest or service worker errors**
+`npm run dev` doesn't register a service worker by design — build and serve
+the production bundle (`npm run build && npm run preview`) to test PWA
+behavior locally. In dev tools, check Application → Manifest and
+Application → Service Workers for errors; the most common cause is testing
+over plain HTTP on a non-localhost address (PWAs require HTTPS or
+`localhost`).
+
+---
+
+## Mobile / PWA
+
+SpendFlow is one responsive web app — not a separate mobile app — that can
+also be **installed** from your phone's browser for a full-screen, app-like
+experience. There is no App Store/Play Store listing; "installing" just
+saves a shortcut that launches the same web app without browser chrome.
+
+**Opening it on mobile:** visit the same URL
+(`https://<your-github-username>.github.io/spendflow/`) in any modern mobile
+browser — Chrome or Safari both work. No install is required to use it.
+
+**Installing on Android (Chrome):**
+
+1. Open the site in Chrome.
+2. Tap the **install icon** in the address bar, or the **⋮** menu →
+   **Install app** / **Add to Home screen**.
+3. Alternatively, visit **Settings** inside SpendFlow — if your browser has
+   signaled the app is installable, an **Install SpendFlow** button appears
+   there too.
+4. Confirm. SpendFlow now launches from your home screen in standalone mode
+   (no address bar).
+
+**Installing on iPhone/iPad (Safari):** iOS does not support one-tap
+installation the way Android does — there is no programmatic install prompt
+on iOS, by Apple's own design, so this is a manual flow:
+
+1. Open the site in **Safari** (this only works in Safari, not Chrome-on-iOS).
+2. Tap the **Share** icon (the square with an upward arrow).
+3. Scroll down and tap **Add to Home Screen**.
+4. Tap **Add**. A SpendFlow icon appears on your home screen and opens in
+   standalone mode.
+
+**How the PWA relates to the web app:** it's the exact same application,
+same code, same URL — installing just adds a home-screen icon and a
+standalone window. Nothing about how it works, what it stores, or how it
+authenticates changes based on whether it's "installed."
+
+**The Google Sheet remains the source of truth either way.** The installed
+app does not sync, store, or cache your financial data locally — every time
+you open it, it reads live from your Google Sheet exactly as the browser
+version does. The service worker only caches the app's static shell (its
+code, not your data) so the app _opens_ a little faster and can show a clear
+"offline" error instead of a blank page if your connection drops — it never
+lets you work with stale numbers or pretends an action saved when it didn't.
+See [Financial Data Safety](#financial-data-safety) for the full reasoning.
+
 ---
 
 ## Security Notes
@@ -324,13 +384,23 @@ installed global tool version.
 
 SpendFlow does not cache financial data beyond the current browser tab's
 in-memory React state. There is no `localStorage`/`IndexedDB` persistence of
-sheet data, no service worker, and no offline mode. Every page load re-reads
-from Google Sheets, which remains the single source of truth. The tradeoff:
-the app is unusable fully offline, and every navigation that generates
-monthly items makes a round trip to Google — acceptable for a single-user,
-low-frequency personal finance tool, and a deliberate choice to avoid a
-second place where sensitive financial data could linger or drift out of
-sync with the sheet.
+sheet data, and no offline data mode. Every page load re-reads from Google
+Sheets, which remains the single source of truth. The tradeoff: the app is
+unusable fully offline for anything financial, and every navigation that
+generates monthly items makes a round trip to Google — acceptable for a
+single-user, low-frequency personal finance tool, and a deliberate choice to
+avoid a second place where sensitive financial data could linger or drift
+out of sync with the sheet.
+
+The PWA's service worker (added for installability — see
+[Mobile / PWA](#mobile--pwa)) only precaches the **static app shell**: the
+built JS/CSS/HTML and icons. It has **zero runtime-caching rules for any
+Google API** — every Sheets/Auth request always goes to the live network,
+every time, with no exceptions. Concretely: the service worker can make the
+app's UI _open_ while offline, but it cannot and does not make a "Mark Paid"
+or any other write look like it succeeded without Google actually confirming
+it — a failed request surfaces as a friendly error, same as it would without
+a service worker at all.
 
 ## Known Limitations
 

@@ -17,7 +17,11 @@ export const navItems: NavItem[] = [
   { label: 'Settings', path: '/settings', icon: Settings },
 ];
 
-/** Subset shown in the mobile bottom nav — kept short to fit touch targets. */
-export const mobileNavItems: NavItem[] = navItems.filter((item) =>
-  ['/dashboard', '/months', '/regular', '/extra', '/presets'].includes(item.path),
+/**
+ * Everything not already on the mobile bottom bar (Dashboard, Months, Add,
+ * Extra) — surfaced through its "More" sheet instead, so no functionality
+ * is lost to a 4-slot bar.
+ */
+export const moreNavItems: NavItem[] = navItems.filter((item) =>
+  ['/regular', '/presets', '/settings'].includes(item.path),
 );

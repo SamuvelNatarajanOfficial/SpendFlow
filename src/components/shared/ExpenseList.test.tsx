@@ -14,11 +14,17 @@ const items: ExpenseRowItem[] = [
   },
 ];
 
+// ExpenseRow renders two parallel layouts (a mobile card, hidden via CSS
+// below `sm:`, and a desktop row, hidden via CSS above it) so each piece of
+// content appears twice in the DOM — jsdom doesn't evaluate media queries,
+// so both copies are always "present" to queries. Assertions here use
+// getAllBy*/findAllBy* to match that reality rather than assume a single copy.
+
 describe('ExpenseList', () => {
   it('renders an expense row for each item', () => {
     render(<ExpenseList items={items} />);
-    expect(screen.getByText('Rent')).toBeInTheDocument();
-    expect(screen.getByText('₹15,000')).toBeInTheDocument();
+    expect(screen.getAllByText('Rent').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('₹15,000').length).toBeGreaterThan(0);
   });
 
   it('renders an empty state when there are no items', () => {
@@ -45,7 +51,8 @@ describe('ExpenseList', () => {
       />,
     );
 
-    await userEvent.click(screen.getByRole('button', { name: 'Mark Pending' }));
+    const [firstButton] = screen.getAllByRole('button', { name: 'Mark Pending' });
+    await userEvent.click(firstButton);
     expect(onMarkPaid).toHaveBeenCalledWith('1');
   });
 
@@ -54,6 +61,6 @@ describe('ExpenseList', () => {
       { ...items[0], categoryBadge: <span>Home</span> },
     ];
     render(<ExpenseList items={itemsWithBadge} />);
-    expect(screen.getByText('Home')).toBeInTheDocument();
+    expect(screen.getAllByText('Home').length).toBeGreaterThan(0);
   });
 });

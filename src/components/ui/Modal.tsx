@@ -47,7 +47,7 @@ export function Modal({ isOpen, onClose, title, children }: ModalProps) {
             size="sm"
             aria-label="Close dialog"
             onClick={onClose}
-            className="-mr-2 h-8 w-8 p-0"
+            className="-mr-2 size-11 p-0"
           >
             <X className="size-4" aria-hidden="true" />
           </Button>

@@ -48,4 +48,12 @@ describe('ExpenseList', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Mark Pending' }));
     expect(onMarkPaid).toHaveBeenCalledWith('1');
   });
+
+  it('renders a categoryBadge next to the name when provided', () => {
+    const itemsWithBadge: ExpenseRowItem[] = [
+      { ...items[0], categoryBadge: <span>Home</span> },
+    ];
+    render(<ExpenseList items={itemsWithBadge} />);
+    expect(screen.getByText('Home')).toBeInTheDocument();
+  });
 });

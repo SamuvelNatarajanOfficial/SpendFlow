@@ -2,6 +2,8 @@ import { MonthSelector } from '../components/dashboard/MonthSelector';
 import { ExpenseList } from '../components/shared/ExpenseList';
 import { ProgressBar } from '../components/shared/ProgressBar';
 import { EmptyState } from '../components/shared/EmptyState';
+import { PresetCategoryBadge } from '../components/shared/PresetCategoryBadge';
+import { Skeleton } from '../components/ui/Skeleton';
 import { Button } from '../components/ui/Button';
 import { useMonthNavigation } from '../hooks/useMonthNavigation';
 import { useMonthData } from '../hooks/useMonthData';
@@ -21,10 +23,18 @@ export function Months() {
         deleted.
       </p>
 
-      {isLoading && !data && <p className="text-sm text-muted">Loading…</p>}
+      {isLoading && !data && (
+        <div className="flex flex-col gap-4" aria-busy="true">
+          <span className="sr-only">Loading…</span>
+          <Skeleton className="h-32 w-full rounded-xl" />
+          <Skeleton className="h-14 w-full rounded-lg" />
+          <Skeleton className="h-14 w-full rounded-lg" />
+        </div>
+      )}
 
       {error && (
         <EmptyState
+          tone="error"
           title="Couldn't load this month"
           description={error}
           action={<Button onClick={reload}>Retry</Button>}
@@ -82,6 +92,7 @@ export function Months() {
                 amount: item.amount,
                 dueDate: item.dueDate,
                 displayStatus: item.displayStatus,
+                categoryBadge: <PresetCategoryBadge category={item.category} />,
               }))}
               emptyTitle="No regular items this month"
               emptyDescription="Active presets will generate items here automatically."

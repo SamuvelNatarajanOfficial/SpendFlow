@@ -4,7 +4,9 @@ import { MonthSelector } from '../components/dashboard/MonthSelector';
 import { ExpenseList } from '../components/shared/ExpenseList';
 import { EmptyState } from '../components/shared/EmptyState';
 import { AddExtraItemModal } from '../components/shared/AddExtraItemModal';
+import { Skeleton } from '../components/ui/Skeleton';
 import { Button } from '../components/ui/Button';
+import { FloatingActionButton } from '../components/ui/FloatingActionButton';
 import { useMonthNavigation } from '../hooks/useMonthNavigation';
 import { useMonthData } from '../hooks/useMonthData';
 import { getMonthLabel } from '../services/financeEngine/month';
@@ -37,16 +39,24 @@ export function Extra() {
         <p className="text-sm text-muted">
           One-time and additional spending outside the regular budget.
         </p>
-        <Button size="sm" onClick={() => setIsModalOpen(true)}>
+        <Button size="md" onClick={() => setIsModalOpen(true)}>
           <Plus className="size-4" aria-hidden="true" />
-          Add Item
+          Add Extra
         </Button>
       </div>
 
-      {isLoading && !data && <p className="text-sm text-muted">Loading…</p>}
+      {isLoading && !data && (
+        <div className="flex flex-col gap-2" aria-busy="true">
+          <span className="sr-only">Loading…</span>
+          {Array.from({ length: 3 }, (_, index) => (
+            <Skeleton key={index} className="h-14 w-full rounded-lg" />
+          ))}
+        </div>
+      )}
 
       {error && (
         <EmptyState
+          tone="error"
           title="Couldn't load this month"
           description={error}
           action={<Button onClick={reload}>Retry</Button>}
@@ -71,7 +81,7 @@ export function Extra() {
             const isPaid = sourceItem?.status === 'PAID';
             return (
               <Button
-                size="sm"
+                size="md"
                 variant="secondary"
                 onClick={() => void toggle(item.id, Boolean(isPaid))}
               >
@@ -91,6 +101,8 @@ export function Extra() {
           reload();
         }}
       />
+
+      <FloatingActionButton label="Add Extra" onClick={() => setIsModalOpen(true)} />
     </div>
   );
 }

@@ -17,27 +17,32 @@ export function MonthSelector({
   disableNext,
 }: MonthSelectorProps) {
   return (
-    <div className="flex items-center justify-between gap-4 rounded-xl border border-border bg-card px-4 py-3">
+    <div className="flex items-center justify-between gap-2 rounded-xl border border-border bg-card px-2 py-2 sm:gap-4 sm:px-4 sm:py-3">
       <Button
         variant="ghost"
         size="sm"
         aria-label="Previous month"
         onClick={onPrevious}
         disabled={disablePrevious}
-        className="h-9 w-9 p-0"
+        className="size-11 shrink-0 p-0"
       >
-        <ChevronLeft className="size-4" aria-hidden="true" />
+        <ChevronLeft className="size-5" aria-hidden="true" />
       </Button>
-      <span className="text-base font-semibold text-text">{label}</span>
+      <span
+        aria-live="polite"
+        className="truncate text-sm font-semibold text-text sm:text-base"
+      >
+        {label}
+      </span>
       <Button
         variant="ghost"
         size="sm"
         aria-label="Next month"
         onClick={onNext}
         disabled={disableNext}
-        className="h-9 w-9 p-0"
+        className="size-11 shrink-0 p-0"
       >
-        <ChevronRight className="size-4" aria-hidden="true" />
+        <ChevronRight className="size-5" aria-hidden="true" />
       </Button>
     </div>
   );

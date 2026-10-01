@@ -10,6 +10,8 @@ export interface SummaryCardProps {
   amount: number;
   icon: LucideIcon;
   tone?: SummaryCardTone;
+  /** Small secondary line under the amount, e.g. "72% complete". */
+  subtext?: string;
   className?: string;
 }
 
@@ -27,6 +29,7 @@ export function SummaryCard({
   amount,
   icon: Icon,
   tone = 'neutral',
+  subtext,
   className,
 }: SummaryCardProps) {
   const styles = toneStyles[tone];
@@ -34,7 +37,7 @@ export function SummaryCard({
   return (
     <div
       className={cn(
-        'flex items-center gap-4 rounded-xl border border-border bg-card p-5 shadow-sm',
+        'flex items-center gap-4 rounded-xl border border-border bg-card p-5 shadow-sm transition-shadow hover:shadow-md',
         className,
       )}
     >
@@ -46,9 +49,10 @@ export function SummaryCard({
       >
         <Icon className={cn('size-5', styles.icon)} aria-hidden="true" />
       </div>
-      <div className="flex flex-col">
+      <div className="flex min-w-0 flex-col">
         <span className="text-sm text-muted">{label}</span>
         <span className="text-xl font-semibold text-text">{formatCurrency(amount)}</span>
+        {subtext && <span className="text-xs text-muted">{subtext}</span>}
       </div>
     </div>
   );

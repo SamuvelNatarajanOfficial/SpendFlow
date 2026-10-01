@@ -1,7 +1,7 @@
-/// <reference types="vitest/config" />
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defineConfig } from 'vite';
+import { configDefaults } from 'vitest/config';
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -10,5 +10,7 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
     setupFiles: ['./src/test/setup.ts'],
+    // .kilo/ is another tool's nested git worktree, not our source tree.
+    exclude: [...configDefaults.exclude, '.kilo/**'],
   },
 });

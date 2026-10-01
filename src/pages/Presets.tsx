@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Button } from '../components/ui/Button';
+import { Skeleton } from '../components/ui/Skeleton';
 import { PresetCategoryBadge } from '../components/shared/PresetCategoryBadge';
 import { EmptyState } from '../components/shared/EmptyState';
 import { PresetFormModal } from '../components/presets/PresetFormModal';
@@ -82,13 +83,13 @@ export function Presets() {
         <p className="text-sm text-muted">
           Recurring presets that generate this month&apos;s regular items automatically.
         </p>
-        <Button size="sm" onClick={openCreate}>
+        <Button size="md" onClick={openCreate}>
           <Plus className="size-4" aria-hidden="true" />
           New Preset
         </Button>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-muted">
+      <label className="flex min-h-11 items-center gap-2 text-sm text-muted">
         <input
           type="checkbox"
           checked={showInactive}
@@ -100,13 +101,21 @@ export function Presets() {
 
       {error && (
         <EmptyState
+          tone="error"
           title="Couldn't load presets"
           description={error}
           action={<Button onClick={refresh}>Retry</Button>}
         />
       )}
 
-      {!error && presets === null && <p className="text-sm text-muted">Loading…</p>}
+      {!error && presets === null && (
+        <div className="flex flex-col gap-2" aria-busy="true">
+          <span className="sr-only">Loading…</span>
+          {Array.from({ length: 3 }, (_, index) => (
+            <Skeleton key={index} className="h-16 w-full rounded-lg" />
+          ))}
+        </div>
+      )}
 
       {!error && presets !== null && visiblePresets.length === 0 && (
         <EmptyState
@@ -143,11 +152,11 @@ export function Presets() {
                 <span className="font-medium text-text">
                   {formatCurrency(preset.amount)}
                 </span>
-                <Button size="sm" variant="secondary" onClick={() => openEdit(preset)}>
+                <Button size="md" variant="secondary" onClick={() => openEdit(preset)}>
                   Edit
                 </Button>
                 <Button
-                  size="sm"
+                  size="md"
                   variant={preset.active ? 'danger' : 'secondary'}
                   onClick={() => void handleToggleActive(preset)}
                 >

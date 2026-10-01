@@ -19,6 +19,21 @@ export default defineConfig(({ command, isPreview }) => ({
     react(),
     tailwindcss(),
     VitePWA({
+      // A custom service worker (src/sw.ts) instead of the default
+      // auto-generated one — needed so the navigation response can carry a
+      // Cross-Origin-Opener-Policy header GitHub Pages has no way to send
+      // itself. See src/sw.ts for why that header is required for Google
+      // Sign-In's popup flow to work at all on this host.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.ts',
+      injectManifest: {
+        // Precache only the built app shell (JS/CSS/HTML/icons). sw.ts adds
+        // no runtime-caching rule for Google's APIs — financial data must
+        // never be served from a cache, so those requests always hit the
+        // network, every time.
+        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
+      },
       // Updates silently on next load — a personal single-user app has no
       // need to nag about new versions.
       registerType: 'autoUpdate',
@@ -42,13 +57,6 @@ export default defineConfig(({ command, isPreview }) => ({
           { src: 'icon-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png' },
         ],
-      },
-      workbox: {
-        // Precache only the built app shell (JS/CSS/HTML/icons). No
-        // runtime-caching rule is added for Google's APIs — financial data
-        // must never be served from a cache, so those requests are simply
-        // left to go to the network as normal, every time.
-        globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
       },
     }),
   ],

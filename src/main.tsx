@@ -5,6 +5,13 @@ import './index.css';
 import App from './App.tsx';
 import { AuthProvider } from './context/AuthProvider';
 import { AuthGate } from './components/auth/AuthGate';
+import { registerServiceWorker } from './registerServiceWorker';
+
+// No service worker exists in dev (`npm run dev`) — only register in a
+// production build, where sw.js is actually built and served.
+if (import.meta.env.PROD) {
+  registerServiceWorker();
+}
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

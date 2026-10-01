@@ -34,9 +34,12 @@ export default defineConfig(({ command, isPreview }) => ({
         // network, every time.
         globPatterns: ['**/*.{js,css,html,svg,png,ico}'],
       },
-      // Updates silently on next load — a personal single-user app has no
-      // need to nag about new versions.
-      registerType: 'autoUpdate',
+      // We register the service worker ourselves (src/registerServiceWorker.ts),
+      // so we can reload once when a new one first takes control — required
+      // for the COOP header below to apply before the user can click
+      // "Sign in with Google" on a first-ever visit. `registerType` has no
+      // effect without the plugin's own injected registration script.
+      injectRegister: false,
       // The app's existing icon set (public/icon*.png, favicon.*) — used as
       // the PWA's icons as-is, not replaced with generated artwork.
       includeAssets: ['favicon.svg', 'favicon.ico', 'icon-120.png', 'icon-1024.png'],

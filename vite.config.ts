@@ -6,12 +6,15 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vite.dev/config/
 export default defineConfig(({ command, isPreview }) => ({
-  // GitHub Pages serves this repo at /spendflow/, so production assets must
-  // be built with that base path. `vite preview` serves the already-built
-  // dist/ folder (whose index.html references /spendflow/...), so it needs
-  // the same base despite internally using command 'serve' like dev does —
-  // `isPreview` is what actually distinguishes it from `npm run dev`.
-  base: command === 'build' || isPreview ? '/spendflow/' : '/',
+  // GitHub Pages serves this repo at /SpendFlow/ (the repository name's
+  // exact casing — GitHub Pages asset serving is case-sensitive, so this
+  // must match the repo name precisely or every asset 404s and the app
+  // renders a blank page). Production assets must be built with that base
+  // path. `vite preview` serves the already-built dist/ folder (whose
+  // index.html references /SpendFlow/...), so it needs the same base
+  // despite internally using command 'serve' like dev does — `isPreview` is
+  // what actually distinguishes it from `npm run dev`.
+  base: command === 'build' || isPreview ? '/SpendFlow/' : '/',
   plugins: [
     react(),
     tailwindcss(),
@@ -32,7 +35,7 @@ export default defineConfig(({ command, isPreview }) => ({
         display: 'standalone',
         orientation: 'portrait',
         // Relative to the manifest's own URL, so this resolves correctly
-        // whether served at '/' (dev) or '/spendflow/' (GitHub Pages).
+        // whether served at '/' (dev) or '/SpendFlow/' (GitHub Pages).
         start_url: '.',
         scope: '.',
         icons: [

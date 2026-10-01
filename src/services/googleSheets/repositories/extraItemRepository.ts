@@ -7,7 +7,7 @@ const SHEET_NAME = 'ExtraItems';
 
 const mapper = createRowMapper<ExtraItem>([
   column('id', 'Id', cell.string, parseCell.string),
-  column('monthId', 'MonthId', cell.string, parseCell.string),
+  column('month', 'Month', cell.string, parseCell.string),
   column('name', 'Name', cell.string, parseCell.string),
   column('amount', 'Amount', cell.number, parseCell.number),
   column('status', 'Status', cell.string, parseCell.status),
@@ -23,9 +23,9 @@ const baseRepository = createSheetRepository<ExtraItem>({
   mapper,
 });
 
-async function listByMonth(monthId: string): Promise<ExtraItem[]> {
+async function listByMonth(month: string): Promise<ExtraItem[]> {
   const { rows } = await getSheetRows(SHEET_NAME);
-  return rows.map(mapper.fromRow).filter((item) => item.monthId === monthId);
+  return rows.map(mapper.fromRow).filter((item) => item.month === month);
 }
 
 export const extraItemRepository = { ...baseRepository, listByMonth };

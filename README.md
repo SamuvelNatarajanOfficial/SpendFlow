@@ -5,11 +5,12 @@ tracking monthly salary, regular needs, and extra spending.
 
 ## Status
 
-**Phase 2 — Google Authentication & Google Sheets Data Layer.** The app now
-signs in with Google, restricts access to a single allow-listed account, and
-has a typed Google Sheets service layer (repositories, row mapping, error
-handling). The UI still runs on mock data — monthly calculations and wiring
-the pages up to live spreadsheet data are Phase 3.
+**Phase 3 — Monthly Finance Engine.** The app is fully wired to live Google
+Sheets data: salary, recurring presets (with start/end months — loans and
+rent work the same way), generated monthly items, extra items, paid/pending/
+overdue status, and month-level totals are all real and persisted. Presets
+support full CRUD (deactivate, never delete). Opening a month is idempotent —
+re-opening it never creates duplicate items for the same preset.
 
 ## Tech Stack
 
@@ -49,19 +50,21 @@ Google Cloud, OAuth, and spreadsheet setup walkthrough.
 
 ```
 src/
-  components/   Reusable UI building blocks (ui, layout, shared, dashboard, auth)
+  components/   Reusable UI building blocks (ui, layout, shared, dashboard, presets, auth)
   pages/        Route-level page components
   layouts/      Page shells composed from layout components
-  hooks/        Shared React hooks
+  hooks/        Shared React hooks (month navigation, month data loading)
   context/      React context providers (AuthProvider)
   lib/          App configuration (navigation, etc.)
-  types/        Shared TypeScript types
-  data/         Isolated mock data layer (swap for Google Sheets later)
+  types/        Shared TypeScript types (sheets.ts = persisted schema)
   services/
-    googleSheets/   Auth, API client, generic sheet ops, typed repositories
+    googleSheets/    Auth, API client, generic sheet ops, typed repositories
+    financeEngine/   Pure month/status/total calculations + orchestration
   utils/        Formatting and small helpers
 ```
 
-Mock data lives entirely in `src/data/mockData.ts` so it can be removed
-cleanly once the pages are wired up to the repositories in
-`src/services/googleSheets/repositories/`.
+`src/services/financeEngine/` has no network calls — `month.ts`,
+`statusEngine.ts`, `presetMatching.ts`, `monthlyItemGeneration.ts` and
+`totals.ts` are pure functions, unit-tested directly. `monthService.ts` is
+the only impure layer, composing those functions with the Google Sheets
+repositories.

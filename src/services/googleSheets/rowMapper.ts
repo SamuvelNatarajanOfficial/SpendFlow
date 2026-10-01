@@ -1,5 +1,5 @@
 import { MalformedRowError } from './errors';
-import type { ItemStatus } from '../../types/sheets';
+import type { ItemStatus, PresetCategory } from '../../types/sheets';
 
 export interface ColumnDef<T> {
   header: string;
@@ -59,16 +59,29 @@ export function createRowMapper<T>(columns: ColumnDef<T>[]): RowMapper<T> {
   };
 }
 
+const PRESET_CATEGORIES: readonly PresetCategory[] = [
+  'HOME',
+  'LOAN',
+  'BILL',
+  'FAMILY',
+  'TRANSPORT',
+  'OTHER',
+];
+
+const ITEM_STATUSES: readonly ItemStatus[] = ['PENDING', 'PAID', 'SKIPPED'];
+
 /** Serializers for writing plain values into sheet cells. */
 export const cell = {
   string: (value: string): string => value,
   number: (value: number): string => String(value),
   boolean: (value: boolean): string => (value ? 'TRUE' : 'FALSE'),
+  nullableString: (value: string | null): string => value ?? '',
 };
 
 /** Parsers for reading sheet cells back into typed values; throw on bad input. */
 export const parseCell = {
   string: (value: string): string => value,
+  nullableString: (value: string): string | null => (value.trim() === '' ? null : value),
   number: (value: string): number => {
     const parsed = Number(value);
     if (Number.isNaN(parsed)) {
@@ -78,9 +91,17 @@ export const parseCell = {
   },
   boolean: (value: string): boolean => value.trim().toUpperCase() === 'TRUE',
   status: (value: string): ItemStatus => {
-    if (value === 'paid' || value === 'pending' || value === 'overdue') {
-      return value;
+    if (ITEM_STATUSES.includes(value as ItemStatus)) {
+      return value as ItemStatus;
     }
-    throw new Error(`Expected a status of paid/pending/overdue, got "${value}".`);
+    throw new Error(`Expected a status of ${ITEM_STATUSES.join('/')}, got "${value}".`);
+  },
+  presetCategory: (value: string): PresetCategory => {
+    if (PRESET_CATEGORIES.includes(value as PresetCategory)) {
+      return value as PresetCategory;
+    }
+    throw new Error(
+      `Expected a category of ${PRESET_CATEGORIES.join('/')}, got "${value}".`,
+    );
   },
 };

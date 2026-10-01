@@ -1,14 +1,14 @@
-import { CheckCircle2, Clock, AlertCircle } from 'lucide-react';
-import type { ExpenseStatus } from '../../types';
+import { CheckCircle2, Clock, AlertCircle, MinusCircle } from 'lucide-react';
+import type { DisplayStatus } from '../../services/financeEngine/statusEngine';
 import { cn } from '../../utils/cn';
 
 export interface StatusBadgeProps {
-  status: ExpenseStatus;
+  status: DisplayStatus;
   className?: string;
 }
 
 const statusConfig: Record<
-  ExpenseStatus,
+  DisplayStatus,
   { label: string; icon: typeof CheckCircle2; classes: string }
 > = {
   paid: {
@@ -25,6 +25,11 @@ const statusConfig: Record<
     label: 'Overdue',
     icon: AlertCircle,
     classes: 'bg-overdue/10 text-overdue',
+  },
+  skipped: {
+    label: 'Skipped',
+    icon: MinusCircle,
+    classes: 'bg-slate-100 text-muted',
   },
 };
 

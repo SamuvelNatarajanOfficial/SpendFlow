@@ -2,7 +2,8 @@ import type { LucideIcon } from 'lucide-react';
 import { cn } from '../../utils/cn';
 import { formatCurrency } from '../../utils/currency';
 
-export type SummaryCardTone = 'primary' | 'regular' | 'extra' | 'neutral';
+export type SummaryCardTone =
+  'primary' | 'regular' | 'extra' | 'neutral' | 'pending' | 'overdue';
 
 export interface SummaryCardProps {
   label: string;
@@ -17,6 +18,8 @@ const toneStyles: Record<SummaryCardTone, { icon: string; iconWrap: string }> = 
   regular: { icon: 'text-regular', iconWrap: 'bg-regular/10' },
   extra: { icon: 'text-extra', iconWrap: 'bg-extra/10' },
   neutral: { icon: 'text-text', iconWrap: 'bg-slate-100' },
+  pending: { icon: 'text-pending', iconWrap: 'bg-pending/10' },
+  overdue: { icon: 'text-overdue', iconWrap: 'bg-overdue/10' },
 };
 
 export function SummaryCard({

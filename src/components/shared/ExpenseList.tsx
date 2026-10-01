@@ -1,26 +1,28 @@
-import type { Expense } from '../../types';
-import { ExpenseRow } from './ExpenseRow';
+import type { ReactNode } from 'react';
+import { ExpenseRow, type ExpenseRowItem } from './ExpenseRow';
 import { EmptyState } from './EmptyState';
 
 export interface ExpenseListProps {
-  expenses: Expense[];
+  items: ExpenseRowItem[];
   emptyTitle?: string;
   emptyDescription?: string;
+  renderAction?: (item: ExpenseRowItem) => ReactNode;
 }
 
 export function ExpenseList({
-  expenses,
+  items,
   emptyTitle = 'No expenses yet',
   emptyDescription = 'Add an expense to see it listed here.',
+  renderAction,
 }: ExpenseListProps) {
-  if (expenses.length === 0) {
+  if (items.length === 0) {
     return <EmptyState title={emptyTitle} description={emptyDescription} />;
   }
 
   return (
     <ul className="flex flex-col gap-2">
-      {expenses.map((expense) => (
-        <ExpenseRow key={expense.id} expense={expense} />
+      {items.map((item) => (
+        <ExpenseRow key={item.id} item={item} action={renderAction?.(item)} />
       ))}
     </ul>
   );

@@ -7,9 +7,10 @@ const SHEET_NAME = 'MonthlyItems';
 
 const mapper = createRowMapper<MonthlyItem>([
   column('id', 'Id', cell.string, parseCell.string),
-  column('monthId', 'MonthId', cell.string, parseCell.string),
+  column('month', 'Month', cell.string, parseCell.string),
   column('presetId', 'PresetId', cell.string, parseCell.string),
   column('name', 'Name', cell.string, parseCell.string),
+  column('category', 'Category', cell.string, parseCell.presetCategory),
   column('amount', 'Amount', cell.number, parseCell.number),
   column('status', 'Status', cell.string, parseCell.status),
   column('dueDate', 'DueDate', cell.string, parseCell.string),
@@ -24,9 +25,9 @@ const baseRepository = createSheetRepository<MonthlyItem>({
   mapper,
 });
 
-async function listByMonth(monthId: string): Promise<MonthlyItem[]> {
+async function listByMonth(month: string): Promise<MonthlyItem[]> {
   const { rows } = await getSheetRows(SHEET_NAME);
-  return rows.map(mapper.fromRow).filter((item) => item.monthId === monthId);
+  return rows.map(mapper.fromRow).filter((item) => item.month === month);
 }
 
 export const monthlyItemRepository = { ...baseRepository, listByMonth };

@@ -1,9 +1,19 @@
-import type { Expense } from '../../types';
+import type { ReactNode } from 'react';
+import type { DisplayStatus } from '../../services/financeEngine/statusEngine';
 import { formatCurrency } from '../../utils/currency';
 import { StatusBadge } from './StatusBadge';
 
+export interface ExpenseRowItem {
+  id: string;
+  name: string;
+  amount: number;
+  dueDate: string;
+  displayStatus: DisplayStatus;
+}
+
 export interface ExpenseRowProps {
-  expense: Expense;
+  item: ExpenseRowItem;
+  action?: ReactNode;
 }
 
 const dateFormatter = new Intl.DateTimeFormat('en-IN', {
@@ -11,18 +21,19 @@ const dateFormatter = new Intl.DateTimeFormat('en-IN', {
   month: 'short',
 });
 
-export function ExpenseRow({ expense }: ExpenseRowProps) {
+export function ExpenseRow({ item, action }: ExpenseRowProps) {
   return (
-    <li className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-4 py-3">
+    <li className="flex flex-col gap-3 rounded-lg border border-border bg-card px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="flex min-w-0 flex-col">
-        <span className="truncate font-medium text-text">{expense.name}</span>
+        <span className="truncate font-medium text-text">{item.name}</span>
         <span className="text-xs text-muted">
-          Due {dateFormatter.format(new Date(expense.dueDate))}
+          Due {dateFormatter.format(new Date(item.dueDate))}
         </span>
       </div>
       <div className="flex shrink-0 items-center gap-3">
-        <span className="font-medium text-text">{formatCurrency(expense.amount)}</span>
-        <StatusBadge status={expense.status} />
+        <span className="font-medium text-text">{formatCurrency(item.amount)}</span>
+        <StatusBadge status={item.displayStatus} />
+        {action}
       </div>
     </li>
   );

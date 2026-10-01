@@ -63,11 +63,29 @@ describe('parseCell', () => {
   });
 
   it('parses a valid status', () => {
-    expect(parseCell.status('paid')).toBe('paid');
+    expect(parseCell.status('PAID')).toBe('PAID');
+    expect(parseCell.status('PENDING')).toBe('PENDING');
+    expect(parseCell.status('SKIPPED')).toBe('SKIPPED');
   });
 
   it('throws for an invalid status', () => {
     expect(() => parseCell.status('unknown')).toThrow();
+    expect(() => parseCell.status('paid')).toThrow();
+  });
+
+  it('parses a valid preset category', () => {
+    expect(parseCell.presetCategory('LOAN')).toBe('LOAN');
+  });
+
+  it('throws for an invalid preset category', () => {
+    expect(() => parseCell.presetCategory('UNKNOWN')).toThrow();
+  });
+
+  it('round-trips a nullable string', () => {
+    expect(parseCell.nullableString('')).toBeNull();
+    expect(parseCell.nullableString('2027-06')).toBe('2027-06');
+    expect(cell.nullableString(null)).toBe('');
+    expect(cell.nullableString('2027-06')).toBe('2027-06');
   });
 
   it('throws for a non-numeric amount', () => {

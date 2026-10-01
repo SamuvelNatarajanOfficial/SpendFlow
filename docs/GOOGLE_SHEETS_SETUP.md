@@ -25,60 +25,68 @@ needed to connect to it.
 | `CreatedAt`     | ISO 8601 string | Set once                       |
 | `UpdatedAt`     | ISO 8601 string | Updated on every save          |
 
-### `Salary` (one row per month's salary)
+### `Salary` (one row per month's salary — latest `UpdatedAt` wins if duplicated)
 
-| Column          | Type            | Notes                      |
-| --------------- | --------------- | -------------------------- |
-| `Id`            | string          | UUID                       |
-| `MonthId`       | string          | Foreign key to `Months.Id` |
-| `Amount`        | number          |                            |
-| `EffectiveDate` | ISO 8601 date   |                            |
-| `Notes`         | string          | Optional                   |
-| `CreatedAt`     | ISO 8601 string |                            |
-| `UpdatedAt`     | ISO 8601 string |                            |
+| Column      | Type            | Notes     |
+| ----------- | --------------- | --------- |
+| `Id`        | string          | UUID      |
+| `Month`     | string          | `YYYY-MM` |
+| `Amount`    | number          |           |
+| `Notes`     | string          | Optional  |
+| `CreatedAt` | ISO 8601 string |           |
+| `UpdatedAt` | ISO 8601 string |           |
 
-### `RegularPresets` (reusable recurring-expense templates)
+### `RegularPresets` (recurring commitments — rent, loans, bills, etc.)
 
-| Column          | Type            | Notes                       |
-| --------------- | --------------- | --------------------------- |
-| `Id`            | string          | UUID                        |
-| `Name`          | string          | e.g. "Rent"                 |
-| `DefaultAmount` | number          |                             |
-| `SortOrder`     | number          | Controls display order      |
-| `Active`        | `TRUE`/`FALSE`  | Inactive presets are hidden |
-| `CreatedAt`     | ISO 8601 string |                             |
-| `UpdatedAt`     | ISO 8601 string |                             |
+| Column       | Type                                                        | Notes                                                        |
+| ------------ | ----------------------------------------------------------- | ------------------------------------------------------------ |
+| `Id`         | string                                                      | UUID                                                         |
+| `Name`       | string                                                      | e.g. "Home Loan"                                             |
+| `Category`   | `HOME` / `LOAN` / `BILL` / `FAMILY` / `TRANSPORT` / `OTHER` |                                                              |
+| `Amount`     | number                                                      | Monthly amount                                               |
+| `StartMonth` | string                                                      | `YYYY-MM` — first month this preset applies                  |
+| `EndMonth`   | string                                                      | `YYYY-MM`, or **empty** for an indefinite preset (e.g. rent) |
+| `DueDay`     | number                                                      | Day of month (1–31); clamped to the month's length           |
+| `Active`     | `TRUE`/`FALSE`                                              | Inactive presets stop generating items but are never deleted |
+| `Notes`      | string                                                      | Optional                                                     |
+| `CreatedAt`  | ISO 8601 string                                             |                                                              |
+| `UpdatedAt`  | ISO 8601 string                                             |                                                              |
 
-### `MonthlyItems` (actual regular expenses for a given month)
+A loan of ₹10,000/month from Jan 2027 to Jun 2027 is just `StartMonth=2027-01`,
+`EndMonth=2027-06` — no special-cased loan logic, it's the same preset
+mechanism as rent or any other recurring item.
 
-| Column      | Type                           | Notes                              |
-| ----------- | ------------------------------ | ---------------------------------- |
-| `Id`        | string                         | UUID                               |
-| `MonthId`   | string                         | Foreign key to `Months.Id`         |
-| `PresetId`  | string                         | Foreign key to `RegularPresets.Id` |
-| `Name`      | string                         |                                    |
-| `Amount`    | number                         |                                    |
-| `Status`    | `paid` / `pending` / `overdue` |                                    |
-| `DueDate`   | ISO 8601 date                  |                                    |
-| `PaidDate`  | ISO 8601 date                  | Empty until paid                   |
-| `Notes`     | string                         | Optional                           |
-| `CreatedAt` | ISO 8601 string                |                                    |
-| `UpdatedAt` | ISO 8601 string                |                                    |
+### `MonthlyItems` (regular items generated from presets for a given month)
+
+| Column      | Type                                                        | Notes                                                      |
+| ----------- | ----------------------------------------------------------- | ---------------------------------------------------------- |
+| `Id`        | string                                                      | Deterministic: `{PresetId}__{Month}` — prevents duplicates |
+| `Month`     | string                                                      | `YYYY-MM`                                                  |
+| `PresetId`  | string                                                      | Foreign key to `RegularPresets.Id`                         |
+| `Name`      | string                                                      |                                                            |
+| `Category`  | `HOME` / `LOAN` / `BILL` / `FAMILY` / `TRANSPORT` / `OTHER` |                                                            |
+| `Amount`    | number                                                      |                                                            |
+| `Status`    | `PENDING` / `PAID` / `SKIPPED`                              | "Overdue" is computed, never stored                        |
+| `DueDate`   | ISO 8601 date                                               |                                                            |
+| `PaidDate`  | ISO 8601 date                                               | Empty until paid                                           |
+| `Notes`     | string                                                      | Optional                                                   |
+| `CreatedAt` | ISO 8601 string                                             |                                                            |
+| `UpdatedAt` | ISO 8601 string                                             |                                                            |
 
 ### `ExtraItems` (one-time / additional expenses for a given month)
 
-| Column      | Type                           | Notes                      |
-| ----------- | ------------------------------ | -------------------------- |
-| `Id`        | string                         | UUID                       |
-| `MonthId`   | string                         | Foreign key to `Months.Id` |
-| `Name`      | string                         |                            |
-| `Amount`    | number                         |                            |
-| `Status`    | `paid` / `pending` / `overdue` |                            |
-| `DueDate`   | ISO 8601 date                  |                            |
-| `PaidDate`  | ISO 8601 date                  | Empty until paid           |
-| `Notes`     | string                         | Optional                   |
-| `CreatedAt` | ISO 8601 string                |                            |
-| `UpdatedAt` | ISO 8601 string                |                            |
+| Column      | Type                           | Notes                 |
+| ----------- | ------------------------------ | --------------------- |
+| `Id`        | string                         | UUID                  |
+| `Month`     | string                         | `YYYY-MM`             |
+| `Name`      | string                         |                       |
+| `Amount`    | number                         |                       |
+| `Status`    | `PENDING` / `PAID` / `SKIPPED` | "Overdue" is computed |
+| `DueDate`   | ISO 8601 date                  |                       |
+| `PaidDate`  | ISO 8601 date                  | Empty until paid      |
+| `Notes`     | string                         | Optional              |
+| `CreatedAt` | ISO 8601 string                |                       |
+| `UpdatedAt` | ISO 8601 string                |                       |
 
 ### `Months` (one row per calendar month)
 

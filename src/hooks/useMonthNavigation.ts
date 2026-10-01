@@ -1,26 +1,14 @@
-import { useMemo, useState } from 'react';
-import { mockCurrentMonthId, mockMonths } from '../data/mockData';
+import { useState } from 'react';
+import { addMonths, getCurrentMonthId } from '../services/financeEngine/month';
 
-export function useMonthNavigation() {
-  const [activeIndex, setActiveIndex] = useState(() =>
-    Math.max(
-      0,
-      mockMonths.findIndex((month) => month.id === mockCurrentMonthId),
-    ),
-  );
-
-  const activeMonth = useMemo(() => mockMonths[activeIndex], [activeIndex]);
-
-  const goToPrevious = () => setActiveIndex((index) => Math.max(0, index - 1));
-
-  const goToNext = () =>
-    setActiveIndex((index) => Math.min(mockMonths.length - 1, index + 1));
+/** Navigates month-by-month with no fixed bound — past months stay reachable. */
+export function useMonthNavigation(initialMonthId: string = getCurrentMonthId()) {
+  const [monthId, setMonthId] = useState(initialMonthId);
 
   return {
-    activeMonth,
-    goToPrevious,
-    goToNext,
-    hasPrevious: activeIndex > 0,
-    hasNext: activeIndex < mockMonths.length - 1,
+    monthId,
+    goToPrevious: () => setMonthId((current) => addMonths(current, -1)),
+    goToNext: () => setMonthId((current) => addMonths(current, 1)),
+    goToToday: () => setMonthId(getCurrentMonthId()),
   };
 }

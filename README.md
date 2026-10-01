@@ -131,7 +131,7 @@ GitHub Pages deployment is the origin only, **without** a path:
 https://<your-github-username>.github.io
 ```
 
-(Not `https://<your-username>.github.io/spendflow` — origins never include a
+(Not `https://<your-username>.github.io/SpendFlow` — origins never include a
 path. Add `http://localhost:5173` as a second origin for local development.)
 
 Authentication flow summary (see `src/services/googleSheets/auth.ts`):
@@ -208,16 +208,16 @@ npm run build
 ```
 
 Runs `tsc -b` (type-check, no emit) then `vite build`. Output goes to
-`dist/`. The build is configured to emit asset paths under `/spendflow/`
+`dist/`. The build is configured to emit asset paths under `/SpendFlow/`
 (see `vite.config.ts`'s `base` option) — correct for GitHub Pages at
-`https://<username>.github.io/spendflow/`, but it means `dist/` **won't**
+`https://<username>.github.io/SpendFlow/`, but it means `dist/` **won't**
 serve correctly from a plain `file://` open or from a server root other than
 that subpath. Use `npm run preview` to sanity-check the production build
 locally (Vite serves it with the same base path).
 
 ## 11. GitHub Pages Deployment
 
-1. **Push this repository to GitHub** as `spendflow` under your account.
+1. **Push this repository to GitHub** as `SpendFlow` under your account.
 2. **Repo Settings → Secrets and variables → Actions → New repository
    secret**, add all three:
    - `VITE_GOOGLE_CLIENT_ID`
@@ -232,7 +232,7 @@ locally (Vite serves it with the same base path).
 5. Your app is live at:
 
    ```
-   https://<your-github-username>.github.io/spendflow/
+   https://<your-github-username>.github.io/SpendFlow/
    ```
 
 6. Go back to [Google Cloud Console credentials](https://console.cloud.google.com/apis/credentials)
@@ -270,9 +270,18 @@ that environment specifically.
 Shouldn't happen — the app uses `HashRouter`, so all routes live after a
 `#` and never hit the server. If you do see this, confirm the GitHub Pages
 source is set to "GitHub Actions" (not a branch), and that the deployed
-`index.html` references `/spendflow/assets/...` (open dev tools → Network
+`index.html` references `/SpendFlow/assets/...` (open dev tools → Network
 tab) — if it references `/assets/...` instead, the build didn't pick up the
 `base` config, usually because it wasn't built via `npm run build`.
+
+**Blank page on the deployed URL even though the Actions deploy succeeded**
+GitHub Pages serves static assets case-sensitively. `vite.config.ts` hardcodes
+the `base` path to match this repository's exact name — if you've renamed
+the repository (or forked it under a different-cased name), update `base` in
+`vite.config.ts` to match that exact casing and redeploy. A mismatch here
+makes every asset request 404, so the JS bundle never loads and the page
+stays blank with no visible error (check dev tools → Network tab for 404s
+on `/assets/...` to confirm this is the cause).
 
 **"Your Google session has expired. Please sign in again."**
 Normal — the in-memory access token doesn't survive a page refresh, or
@@ -307,7 +316,7 @@ experience. There is no App Store/Play Store listing; "installing" just
 saves a shortcut that launches the same web app without browser chrome.
 
 **Opening it on mobile:** visit the same URL
-(`https://<your-github-username>.github.io/spendflow/`) in any modern mobile
+(`https://<your-github-username>.github.io/SpendFlow/`) in any modern mobile
 browser — Chrome or Safari both work. No install is required to use it.
 
 **Installing on Android (Chrome):**

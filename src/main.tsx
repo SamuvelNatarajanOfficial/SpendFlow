@@ -8,7 +8,7 @@ import { AuthGate } from './components/auth/AuthGate';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    {/* No `basename` here — GitHub Pages already serves the app at /spendflow/
+    {/* No `basename` here — GitHub Pages already serves the app at /SpendFlow/
         via Vite's `base` config; HashRouter's basename would apply *inside*
         the hash fragment instead, which isn't what we want. */}
     <HashRouter>

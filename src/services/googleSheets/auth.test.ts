@@ -1,13 +1,31 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('./config', () => ({
+const DEFAULT_CONFIG = {
   googleClientId: 'test-client-id',
   allowedGoogleEmail: 'me@example.com',
-  googleOAuthScopes: 'spreadsheets userinfo.email',
-}));
+  googleOAuthScopes: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email',
+};
 
-function setUrl(url: string) {
-  window.history.replaceState({}, '', url);
+// A mutable object (rather than per-test `vi.doMock`) so one test can change
+// a value — e.g. an empty client ID — without leaking into later tests:
+// `vi.resetModules()` clears the module *cache*, not a `vi.doMock` override,
+// so a per-test `vi.doMock('./config', ...)` would otherwise keep replacing
+// the config for every test that follows it.
+const configState = vi.hoisted(() => ({
+  googleClientId: 'test-client-id',
+  allowedGoogleEmail: 'me@example.com',
+  googleOAuthScopes: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email',
+}));
+vi.mock('./config', () => configState);
+
+// `config.callback`/`config.error_callback` are declared `(response) => void`
+// (see google-identity.d.ts) — auth.ts fires its internal async handling
+// without returning it, so `await`ing the call itself only waits one
+// microtask, not the full fetch()/json() chain inside. Flushing the
+// microtask queue (a macrotask tick) after invoking one is what actually
+// waits for that chain to finish.
+async function flushMicrotasks(): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, 0));
 }
 
 function jsonResponse(status: number, body: unknown): Response {
@@ -17,188 +35,224 @@ function jsonResponse(status: number, body: unknown): Response {
   });
 }
 
-describe('auth (redirect + PKCE flow)', () => {
+interface FakeTokenClient {
+  config: GoogleTokenClientConfig;
+  requestAccessToken: ReturnType<typeof vi.fn>;
+}
+
+function installFakeGoogleIdentityServices(): {
+  initTokenClient: ReturnType<typeof vi.fn>;
+  revoke: ReturnType<typeof vi.fn>;
+  getClient: () => FakeTokenClient;
+} {
+  let lastClient: FakeTokenClient | undefined;
+  const revoke = vi.fn((_token: string, callback?: () => void) => callback?.());
+
+  const initTokenClient = vi.fn((config: GoogleTokenClientConfig) => {
+    const requestAccessToken = vi.fn();
+    lastClient = { config, requestAccessToken };
+    return { requestAccessToken } satisfies GoogleTokenClient;
+  });
+
+  window.google = { accounts: { oauth2: { initTokenClient, revoke } } };
+
+  return {
+    initTokenClient,
+    revoke,
+    getClient: () => {
+      if (!lastClient) throw new Error('initTokenClient was never called');
+      return lastClient;
+    },
+  };
+}
+
+describe('auth (Google Identity Services token client)', () => {
   beforeEach(() => {
-    sessionStorage.clear();
-    setUrl('/SpendFlow/');
+    vi.resetModules();
+    delete window.google;
   });
 
   afterEach(() => {
+    Object.assign(configState, DEFAULT_CONFIG);
     vi.unstubAllGlobals();
     vi.clearAllMocks();
-    vi.resetModules();
+    delete window.google;
   });
 
-  it('resolves to signed-out with no error when the URL carries no OAuth params', async () => {
+  it('reports an error and never requests a token when VITE_GOOGLE_CLIENT_ID is missing', async () => {
+    configState.googleClientId = '';
+    const gis = installFakeGoogleIdentityServices();
     const { initAuth, getAuthState } = await import('./auth');
-    await initAuth();
-    expect(getAuthState()).toMatchObject({ status: 'signed-out', error: null });
-  });
 
-  it('surfaces a Google-side OAuth error from the URL and cleans it up', async () => {
-    setUrl('/SpendFlow/?error=access_denied');
-    const { initAuth, getAuthState } = await import('./auth');
-    await initAuth();
-
-    const result = getAuthState();
-    expect(result.status).toBe('signed-out');
-    expect(result.error).toMatch(/access_denied/);
-    expect(window.location.search).toBe('');
-  });
-
-  it('rejects a returned code whose state does not match what signIn stored', async () => {
-    sessionStorage.setItem('spendflow.oauth.state', 'expected-state');
-    sessionStorage.setItem('spendflow.oauth.code_verifier', 'verifier');
-    setUrl('/SpendFlow/?code=abc123&state=wrong-state');
-
-    const { initAuth, getAuthState } = await import('./auth');
     await initAuth();
 
     expect(getAuthState().status).toBe('error');
-    expect(getAuthState().error).toMatch(/verified/i);
+    expect(gis.initTokenClient).not.toHaveBeenCalled();
   });
 
-  it('rejects a returned code when no verifier/state was ever stored (e.g. direct link)', async () => {
-    setUrl('/SpendFlow/?code=abc123&state=some-state');
+  it('initializes the token client and starts signed-out', async () => {
+    const gis = installFakeGoogleIdentityServices();
     const { initAuth, getAuthState } = await import('./auth');
-    await initAuth();
-    expect(getAuthState().status).toBe('error');
-  });
 
-  it('exchanges a valid code, authorizes an allow-listed email, and cleans the URL', async () => {
-    sessionStorage.setItem('spendflow.oauth.state', 'matching-state');
-    sessionStorage.setItem('spendflow.oauth.code_verifier', 'verifier');
-    setUrl('/SpendFlow/?code=abc123&state=matching-state');
-
-    const fetchMock = vi.fn((url: string) => {
-      if (url.includes('oauth2.googleapis.com/token')) {
-        return Promise.resolve(jsonResponse(200, { access_token: 'token-123' }));
-      }
-      if (url.includes('userinfo')) {
-        return Promise.resolve(jsonResponse(200, { email: 'me@example.com' }));
-      }
-      return Promise.reject(new Error(`Unexpected fetch: ${url}`));
-    });
-    vi.stubGlobal('fetch', fetchMock);
-
-    const { initAuth, getAuthState, getAccessToken } = await import('./auth');
     await initAuth();
 
-    expect(getAuthState()).toMatchObject({ status: 'authorized', email: 'me@example.com' });
-    expect(getAccessToken()).toBe('token-123');
-    expect(window.location.search).toBe('');
-    expect(sessionStorage.getItem('spendflow.oauth.code_verifier')).toBeNull();
-    expect(sessionStorage.getItem('spendflow.oauth.state')).toBeNull();
-  });
-
-  it('denies an authenticated email that is not on the allow-list', async () => {
-    sessionStorage.setItem('spendflow.oauth.state', 'matching-state');
-    sessionStorage.setItem('spendflow.oauth.code_verifier', 'verifier');
-    setUrl('/SpendFlow/?code=abc123&state=matching-state');
-
-    vi.stubGlobal(
-      'fetch',
-      vi.fn((url: string) => {
-        if (url.includes('oauth2.googleapis.com/token')) {
-          return Promise.resolve(jsonResponse(200, { access_token: 'token-123' }));
-        }
-        if (url.includes('userinfo')) {
-          return Promise.resolve(jsonResponse(200, { email: 'someone-else@example.com' }));
-        }
-        if (url.includes('revoke')) {
-          return Promise.resolve(jsonResponse(200, {}));
-        }
-        return Promise.reject(new Error(`Unexpected fetch: ${url}`));
+    expect(gis.initTokenClient).toHaveBeenCalledWith(
+      expect.objectContaining({
+        client_id: 'test-client-id',
+        scope: 'https://www.googleapis.com/auth/spreadsheets https://www.googleapis.com/auth/userinfo.email',
       }),
     );
-
-    const { initAuth, getAuthState, getAccessToken } = await import('./auth');
-    await initAuth();
-
-    expect(getAuthState()).toMatchObject({
-      status: 'denied',
-      email: 'someone-else@example.com',
-    });
-    expect(getAccessToken()).toBeNull();
+    expect(getAuthState()).toEqual({ status: 'signed-out', email: null, error: null });
   });
 
-  it('reports a friendly error when the token exchange itself fails', async () => {
-    sessionStorage.setItem('spendflow.oauth.state', 'matching-state');
-    sessionStorage.setItem('spendflow.oauth.code_verifier', 'verifier');
-    setUrl('/SpendFlow/?code=abc123&state=matching-state');
+  it('signIn requests a token once the client is ready', async () => {
+    const gis = installFakeGoogleIdentityServices();
+    const { initAuth, signIn, getAuthState } = await import('./auth');
 
+    await initAuth();
+    signIn();
+
+    expect(getAuthState().status).toBe('authenticating');
+    expect(gis.getClient().requestAccessToken).toHaveBeenCalledWith({ prompt: 'consent' });
+  });
+
+  it('signIn reports an error if called before the token client is ready', async () => {
+    const { signIn, getAuthState } = await import('./auth');
+
+    signIn();
+
+    expect(getAuthState().status).toBe('error');
+  });
+
+  it('a successful token callback with an allow-listed email reaches authorized', async () => {
     vi.stubGlobal(
       'fetch',
-      vi.fn(() =>
-        Promise.resolve(
-          jsonResponse(400, { error: 'invalid_grant', error_description: 'Bad code' }),
-        ),
-      ),
+      vi.fn().mockResolvedValue(jsonResponse(200, { email: 'me@example.com' })),
     );
-
+    const gis = installFakeGoogleIdentityServices();
     const { initAuth, getAuthState } = await import('./auth');
     await initAuth();
 
-    expect(getAuthState().status).toBe('error');
-    expect(getAuthState().error).toMatch(/Bad code/);
+    gis.getClient().config.callback({
+      access_token: 'test-token',
+      expires_in: 3600,
+      scope: 'scope',
+      token_type: 'Bearer',
+    });
+    await flushMicrotasks();
+
+    expect(getAuthState()).toEqual({
+      status: 'authorized',
+      email: 'me@example.com',
+      error: null,
+    });
   });
 
-  it('signIn stores a PKCE verifier and state, and redirects to Google with a matching challenge', async () => {
-    const { initAuth, signIn } = await import('./auth');
+  it('a successful token callback with a non-allow-listed email is denied and the token is revoked', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, { email: 'someone-else@example.com' })),
+    );
+    const gis = installFakeGoogleIdentityServices();
+    const { initAuth, getAuthState, getAccessToken } = await import('./auth');
     await initAuth();
 
-    // jsdom doesn't implement actual cross-origin navigation — assigning
-    // `window.location.href` just logs "Not implemented" and leaves it
-    // unchanged. Swap in a stub location that records the assignment
-    // instead of relying on jsdom to follow it.
-    const realLocation = window.location;
-    let assignedHref = '';
-    Object.defineProperty(window, 'location', {
-      configurable: true,
-      value: {
-        ...realLocation,
-        get href() {
-          return assignedHref || realLocation.href;
-        },
-        set href(value: string) {
-          assignedHref = value;
-        },
-      },
+    gis.getClient().config.callback({
+      access_token: 'test-token',
+      expires_in: 3600,
+      scope: 'scope',
+      token_type: 'Bearer',
     });
+    await flushMicrotasks();
 
-    try {
-      await signIn();
-    } finally {
-      Object.defineProperty(window, 'location', {
-        configurable: true,
-        value: realLocation,
-      });
-    }
-
-    const verifier = sessionStorage.getItem('spendflow.oauth.code_verifier');
-    const oauthState = sessionStorage.getItem('spendflow.oauth.state');
-    expect(verifier).toBeTruthy();
-    expect(oauthState).toBeTruthy();
-
-    const redirectUrl = new URL(assignedHref);
-    expect(redirectUrl.origin + redirectUrl.pathname).toBe(
-      'https://accounts.google.com/o/oauth2/v2/auth',
-    );
-    expect(redirectUrl.searchParams.get('client_id')).toBe('test-client-id');
-    expect(redirectUrl.searchParams.get('response_type')).toBe('code');
-    expect(redirectUrl.searchParams.get('code_challenge_method')).toBe('S256');
-    expect(redirectUrl.searchParams.get('state')).toBe(oauthState);
-    expect(redirectUrl.searchParams.get('code_challenge')).toBeTruthy();
+    expect(getAuthState()).toEqual({
+      status: 'denied',
+      email: 'someone-else@example.com',
+      error: null,
+    });
+    expect(getAccessToken()).toBeNull();
+    expect(gis.revoke).toHaveBeenCalledWith('test-token', expect.any(Function));
   });
 
-  it('signOut clears the access token and returns to signed-out', async () => {
+  it('a token callback carrying an OAuth error surfaces it', async () => {
+    const gis = installFakeGoogleIdentityServices();
+    const { initAuth, getAuthState } = await import('./auth');
+    await initAuth();
+
+    gis.getClient().config.callback({
+      access_token: '',
+      expires_in: 0,
+      scope: '',
+      token_type: 'Bearer',
+      error: 'access_denied',
+      error_description: 'The user denied access.',
+    });
+    await flushMicrotasks();
+
+    expect(getAuthState().status).toBe('error');
+    expect(getAuthState().error).toBe('access_denied: The user denied access.');
+  });
+
+  it("the token client's error_callback (e.g. popup closed) returns to signed-out with the detail surfaced", async () => {
+    const gis = installFakeGoogleIdentityServices();
+    const { initAuth, getAuthState } = await import('./auth');
+    await initAuth();
+
+    gis.getClient().config.error_callback?.({ type: 'popup_closed', message: 'Popup window closed' });
+
+    expect(getAuthState()).toEqual({
+      status: 'signed-out',
+      email: null,
+      error: 'Google sign-in error (popup_closed): Popup window closed',
+    });
+  });
+
+  it('signOut revokes the token and returns to signed-out', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, { email: 'me@example.com' })),
+    );
+    const gis = installFakeGoogleIdentityServices();
     const { initAuth, signOut, getAuthState, getAccessToken } = await import('./auth');
     await initAuth();
-    vi.stubGlobal('fetch', vi.fn(() => Promise.resolve(jsonResponse(200, {}))));
+    gis.getClient().config.callback({
+      access_token: 'test-token',
+      expires_in: 3600,
+      scope: 'scope',
+      token_type: 'Bearer',
+    });
+    await flushMicrotasks();
 
     signOut();
 
     expect(getAccessToken()).toBeNull();
-    expect(getAuthState().status).toBe('signed-out');
+    expect(getAuthState()).toEqual({ status: 'signed-out', email: null, error: null });
+    expect(gis.revoke).toHaveBeenCalledWith('test-token', expect.any(Function));
+  });
+
+  it('handleSessionExpired revokes the token and shows a session-expired message', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(jsonResponse(200, { email: 'me@example.com' })),
+    );
+    const gis = installFakeGoogleIdentityServices();
+    const { initAuth, handleSessionExpired, getAuthState, getAccessToken } = await import('./auth');
+    await initAuth();
+    gis.getClient().config.callback({
+      access_token: 'test-token',
+      expires_in: 3600,
+      scope: 'scope',
+      token_type: 'Bearer',
+    });
+    await flushMicrotasks();
+
+    handleSessionExpired();
+
+    expect(getAccessToken()).toBeNull();
+    expect(getAuthState()).toEqual({
+      status: 'signed-out',
+      email: null,
+      error: 'Your session expired. Please sign in again.',
+    });
   });
 });

@@ -25,7 +25,29 @@
     <title>SpendFlow — Personal Salary &amp; Expense Planner</title>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- Static fallback shown only in the brief window (typically well
+         under a second) before React mounts — see main.tsx, which may wait
+         for the service worker before rendering. Inline styles so this
+         doesn't depend on the stylesheet having loaded yet. -->
+    <div
+      id="root"
+      style="
+        display: flex;
+        min-height: 100vh;
+        align-items: center;
+        justify-content: center;
+        background: #f8fafc;
+        color: #64748b;
+        font-family:
+          ui-sans-serif,
+          system-ui,
+          -apple-system,
+          sans-serif;
+        font-size: 14px;
+      "
+    >
+      SpendFlow
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

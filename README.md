@@ -41,15 +41,15 @@ third-party server.
   purpose-built mobile cards and bottom navigation, not a shrunk desktop UI.
 - **Installable PWA.** Add SpendFlow to your phone's home screen for a
   full-screen, app-like launch — same app, same URL, no app store.
-- **No backend.** Static React app + Google Sheets API + Google Identity
-  Services. Deploys as plain static files.
+- **No backend.** Static React app + Google Sheets API + Google OAuth 2.0.
+  Deploys as plain static files.
 
 ## 3. Architecture
 
 ```
 Browser (React SPA)
   │
-  ├─ Google Identity Services  — OAuth sign-in, access token (in-memory only)
+  ├─ Google OAuth 2.0 (PKCE)   — OAuth sign-in, access token (in-memory only)
   │
   └─ Google Sheets API         — all reads/writes, using that access token
          │
@@ -87,7 +87,7 @@ or the Sheets client directly.
 | UI      | React 19, TypeScript (strict), Vite                        |
 | Styling | Tailwind CSS v4 (`@theme` tokens), Lucide icons            |
 | Routing | React Router (`HashRouter`, for static-host compatibility) |
-| Auth    | Google Identity Services (OAuth 2.0 token client)          |
+| Auth    | Google OAuth 2.0, Authorization Code + PKCE (redirect flow) |
 | Data    | Google Sheets API v4                                       |
 | Quality | ESLint (flat config) + Prettier                            |
 | Testing | Vitest + Testing Library                                   |
@@ -111,42 +111,59 @@ or the Sheets client directly.
    - Application type: **Web application**.
    - **Authorized JavaScript origins**: add every origin you'll run the app
      from, e.g. `http://localhost:5173` for local dev and
-     `https://<your-username>.github.io` for production (see
+     `https://<your-username>.github.io` for production.
+   - **Authorized redirect URIs**: add the exact deployed URL (including the
+     path, with a trailing slash) for every environment you'll run the app
+     from, e.g. `http://localhost:5173/` for local dev and
+     `https://<your-username>.github.io/SpendFlow/` for production (see
      [Google OAuth Setup](#6-google-oauth-setup) below for the exact value).
-   - No redirect URI is needed — this app uses the token-client (implicit)
-     flow, not a redirect-based one.
+     This app signs in via a full-page redirect, so this field — unlike the
+     origins above — must match exactly, path included, or sign-in fails
+     with `redirect_uri_mismatch`.
    - Copy the generated **Client ID**.
 
 ## 6. Google OAuth Setup
 
-This app uses Google Identity Service's **token client**, requesting the
-`spreadsheets` and `userinfo.email` scopes together in one grant — one
-consent gives both Sheets API access and the email needed for the allow-list
-check.
+This app uses the **Authorization Code + PKCE** flow: clicking "Sign in with
+Google" navigates the whole page to Google's consent screen (no popup), and
+Google redirects back to this same URL with an authorization code, which the
+app exchanges directly for an access token. It requests the `spreadsheets`
+and `userinfo.email` scopes together in one grant — one consent gives both
+Sheets API access and the email needed for the allow-list check.
 
-**The exact origin to register** in _Authorized JavaScript origins_ for a
-GitHub Pages deployment is the origin only, **without** a path:
+**The exact redirect URI to register** in _Authorized redirect URIs_ for a
+GitHub Pages deployment is the full deployed URL, **with** a trailing slash:
 
 ```
-https://<your-github-username>.github.io
+https://<your-github-username>.github.io/SpendFlow/
 ```
 
-(Not `https://<your-username>.github.io/SpendFlow` — origins never include a
-path. Add `http://localhost:5173` as a second origin for local development.)
+(Also add `http://localhost:5173/` as a second redirect URI for local
+development. Unlike _Authorized JavaScript origins_, redirect URIs must
+match path-for-path, including the trailing slash.)
 
 Authentication flow summary (see `src/services/googleSheets/auth.ts`):
 
-1. User clicks "Sign in with Google" → GIS token client requests the token.
-2. The app fetches `userinfo.email` with that token.
-3. The email is compared against `VITE_ALLOWED_GOOGLE_EMAIL`
+1. User clicks "Sign in with Google" → the app generates a PKCE
+   `code_verifier`/`code_challenge` pair and a CSRF `state` value (stored in
+   `sessionStorage`), then redirects the full page to Google's consent
+   screen.
+2. Google redirects back to this same URL with `?code=...&state=...`. The
+   app verifies `state` matches, then exchanges the code (plus the stored
+   `code_verifier`) directly with Google for an access token — no client
+   secret involved, since PKCE is what makes that safe for a browser-only
+   app.
+3. The app fetches `userinfo.email` with that token.
+4. The email is compared against `VITE_ALLOWED_GOOGLE_EMAIL`
    (case/whitespace-insensitive).
-4. **Match** → `authorized`, the app loads. **No match** → the token is
+5. **Match** → `authorized`, the app loads. **No match** → the token is
    immediately revoked and the user sees "Access denied. This application
    is private."
-5. The access token lives only in an in-memory module variable — never
-   localStorage/sessionStorage. A page refresh clears it; signing in again
-   is required. A `401` from the Sheets API triggers the same sign-out path
-   with a "session expired" message.
+6. The access token lives only in an in-memory module variable — never
+   localStorage/sessionStorage (only the single-use PKCE verifier and state
+   briefly do, cleared immediately after the redirect back). A page refresh
+   clears the token; signing in again is required. A `401` from the Sheets
+   API triggers the same sign-out path with a "session expired" message.
 
 ## 7. Google Sheets Setup
 
@@ -236,10 +253,12 @@ locally (Vite serves it with the same base path).
    ```
 
 6. Go back to [Google Cloud Console credentials](https://console.cloud.google.com/apis/credentials)
-   and add that origin (`https://<your-github-username>.github.io`, no
-   path) to the OAuth client's Authorized JavaScript origins if you haven't
-   already — sign-in will fail with `redirect_uri_mismatch`-style errors
-   until that's done.
+   and make sure the OAuth client has both the origin
+   (`https://<your-github-username>.github.io`, no path) in Authorized
+   JavaScript origins **and** the full URL
+   (`https://<your-github-username>.github.io/SpendFlow/`, with the path and
+   trailing slash) in Authorized redirect URIs — sign-in fails with a
+   `redirect_uri_mismatch` error until the redirect URI entry is added.
 
 You can also trigger a deploy manually from the Actions tab
 (`workflow_dispatch`) without pushing a new commit.
@@ -261,10 +280,12 @@ Check both values, and remember this env var is baked in at **build** time —
 changing it requires a rebuild/redeploy, not just an env file edit.
 
 **Sign-in works locally but fails on the deployed site (or vice versa)**
-The two environments need separate entries in _Authorized JavaScript
-origins_: `http://localhost:5173` for local dev, `https://<username>.github.io`
-(origin only, no path) for production. Missing either one breaks sign-in in
-that environment specifically.
+Each environment needs its own entry in **both** _Authorized JavaScript
+origins_ (`http://localhost:5173` / `https://<username>.github.io`, no path)
+**and** _Authorized redirect URIs_ (`http://localhost:5173/` /
+`https://<username>.github.io/SpendFlow/`, full path, trailing slash).
+Missing either one breaks sign-in in that environment specifically; a
+missing redirect URI shows as `redirect_uri_mismatch`.
 
 **Blank page / 404 after a hard refresh or a shared deep link**
 Shouldn't happen — the app uses `HashRouter`, so all routes live after a

@@ -4,6 +4,8 @@ import type { AuthState } from '../services/googleSheets/auth';
 export interface AuthContextValue extends AuthState {
   signIn: () => void;
   signOut: () => void;
+  /** Fully signs out: ends the Google session and the local login gate. */
+  signOutCompletely: () => void;
 }
 
 export const AuthContext = createContext<AuthContextValue | null>(null);

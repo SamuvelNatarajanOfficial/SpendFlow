@@ -148,6 +148,13 @@ Authentication flow summary (see `src/services/googleSheets/auth.ts`):
    is required. A `401` from the Sheets API triggers the same sign-out path
    with a "session expired" message.
 
+**A static login screen (`VITE_APP_USERNAME`/`VITE_APP_PASSWORD`) gates the
+app before any of this.** There's no backend to hold real user accounts, so
+it's an env-var-based check, not real authentication — it does not grant
+Google Sheets access by itself. It's remembered for the browser tab's
+session (`sessionStorage`), so it isn't re-entered on every page refresh;
+"Sign out" in Settings clears both this and the Google session together.
+
 ## 7. Google Sheets Setup
 
 Create one spreadsheet with 7 tabs — **Settings, Salary, RegularPresets,
@@ -170,11 +177,13 @@ Copy `.env.example` to `.env.local` and fill in:
 VITE_GOOGLE_CLIENT_ID=      # OAuth client ID from step 5
 VITE_GOOGLE_SHEET_ID=       # spreadsheet ID from its URL (step 7)
 VITE_ALLOWED_GOOGLE_EMAIL=  # the one Google account allowed to use this app
+VITE_APP_USERNAME=          # static username for the login screen shown before Google sign-in
+VITE_APP_PASSWORD=          # static password for that same screen
 ```
 
 `.env`, `.env.local`, and all `.env.*` variants are git-ignored (only
 `.env.example` is tracked) — never commit real values. For the GitHub Actions
-deployment, the same three values are stored as **repository secrets**
+deployment, the same five values are stored as **repository secrets**
 instead (see [GitHub Pages Deployment](#11-github-pages-deployment)).
 
 Vite only reads env files at startup — restart `npm run dev` after editing
@@ -219,10 +228,12 @@ locally (Vite serves it with the same base path).
 
 1. **Push this repository to GitHub** as `SpendFlow` under your account.
 2. **Repo Settings → Secrets and variables → Actions → New repository
-   secret**, add all three:
+   secret**, add all five:
    - `VITE_GOOGLE_CLIENT_ID`
    - `VITE_GOOGLE_SHEET_ID`
    - `VITE_ALLOWED_GOOGLE_EMAIL`
+   - `VITE_APP_USERNAME`
+   - `VITE_APP_PASSWORD`
 3. **Repo Settings → Pages → Build and deployment → Source**: select
    **GitHub Actions** (not "Deploy from a branch").
 4. Push to `main`. `.github/workflows/deploy.yml` runs automatically:
@@ -382,11 +393,18 @@ See [Financial Data Safety](#financial-data-safety) for the full reasoning.
   Google's OAuth consent screen only allows listed test users to complete
   sign-in at all, and (2) the app's own post-sign-in email check. Either one
   failing denies access.
+- **`VITE_APP_USERNAME`/`VITE_APP_PASSWORD` are also compiled into the public
+  JS bundle, and this one genuinely is visible in plain text to anyone who
+  opens DevTools** — unlike the Client ID above, this isn't a "safe to
+  expose by design" value. It's a basic deterrent (stops a casual visitor
+  from seeing the login form at all), not real protection — the two gates
+  above are what actually protect your data. Don't reuse a real password
+  here, and don't treat this as a substitute for keeping your sheet private.
 - **Secrets that must never be committed**: a real `.env`/`.env.local`, any
   OAuth client _secret_ (this app's flow doesn't use one, but double-check
   before adding any feature that would), access/refresh tokens, and real
   financial data. `.gitignore` excludes all `.env*` except `.env.example`.
-- **Repository secrets, not committed files**, hold these same three values
+- **Repository secrets, not committed files**, hold these same five values
   for CI — see [GitHub Pages Deployment](#11-github-pages-deployment).
 
 ## Financial Data Safety

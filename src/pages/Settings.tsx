@@ -16,7 +16,7 @@ type ConnectionTestState =
   | { status: 'error'; message: string };
 
 export function Settings() {
-  const { email, signOut } = useAuth();
+  const { email, signOutCompletely } = useAuth();
   const [connectionTest, setConnectionTest] = useState<ConnectionTestState>({
     status: 'idle',
   });
@@ -39,7 +39,7 @@ export function Settings() {
           Signed in as <span className="font-medium">{email}</span>
         </p>
         <div>
-          <Button variant="secondary" size="sm" onClick={signOut}>
+          <Button variant="secondary" size="sm" onClick={signOutCompletely}>
             Sign out
           </Button>
         </div>

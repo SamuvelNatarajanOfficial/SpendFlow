@@ -6,6 +6,7 @@ import { InstallPwaSection } from '../components/shared/InstallPwaSection';
 import { useAuth } from '../context/AuthContext';
 import { settingsRepository } from '../services/googleSheets/repositories/settingsRepository';
 import { getFriendlyErrorMessage } from '../services/googleSheets/errors';
+import { AppProtectionSection } from '../components/settings/AppProtectionSection';
 
 const currencyOptions = [{ value: 'INR', label: 'Indian Rupee (₹)' }];
 
@@ -73,6 +74,8 @@ export function Settings() {
           )}
         </div>
       </section>
+
+      <AppProtectionSection />
 
       <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-base font-semibold text-text">Install App</h2>

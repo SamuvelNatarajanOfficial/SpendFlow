@@ -118,3 +118,18 @@ mechanism as rent or any other recurring item.
 | `EntityType` | string          | e.g. `MonthlyItem`                |
 | `EntityId`   | string          |                                   |
 | `Details`    | string          | Free-text description             |
+
+### `Auth` (optional app protection — one row, managed from Settings)
+
+Create the tab with just the header row. Leave it empty (or omit the tab) and
+the app opens without a login. Enable protection in **Settings → App
+Protection** and the app fills row 2 for you.
+
+| Column         | Type            | Notes                                    |
+| -------------- | --------------- | ---------------------------------------- |
+| `Enabled`      | `TRUE`/`FALSE`  | Whether a login is required              |
+| `Username`     | string          |                                          |
+| `PasswordHash` | string          | Salted SHA-256 hex — never the password  |
+| `Salt`         | string          | Random per password                      |
+| `UpdatedAt`    | ISO 8601 string | Updated on every save                    |
+

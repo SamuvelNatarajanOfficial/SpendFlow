@@ -4,7 +4,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 
 export interface LocalLoginScreenProps {
-  onSubmit: (username: string, password: string) => boolean;
+  onSubmit: (username: string, password: string) => Promise<boolean>;
 }
 
 export function LocalLoginScreen({ onSubmit }: LocalLoginScreenProps) {
@@ -12,9 +12,9 @@ export function LocalLoginScreen({ onSubmit }: LocalLoginScreenProps) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const ok = onSubmit(username, password);
+    const ok = await onSubmit(username, password);
     setError(ok ? null : 'Incorrect username or password.');
   }
 
@@ -27,7 +27,7 @@ export function LocalLoginScreen({ onSubmit }: LocalLoginScreenProps) {
         <h1 className="text-xl font-semibold text-text">SpendFlow</h1>
         <p className="text-sm text-muted">Sign in to continue.</p>
       </div>
-      <form onSubmit={handleSubmit} className="flex w-full max-w-xs flex-col gap-4 text-left">
+      <form onSubmit={(event) => void handleSubmit(event)} className="flex w-full max-w-xs flex-col gap-4 text-left">
         <Input
           label="Username"
           autoComplete="username"

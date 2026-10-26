@@ -1,18 +1,50 @@
 /**
- * A static username/password gate shown before Google sign-in, checked
- * against env vars rather than any server. This is not a substitute for the
- * Google OAuth + allow-listed-email check that actually authorizes Google
- * Sheets access — it's an extra local step in front of it, since there's no
- * backend to hold real user accounts.
+ * Optional app protection. By default SpendFlow opens without any extra
+ * login; the user can turn on a username/password in Settings, which is
+ * stored in the `Auth` tab of their Google Sheet (see authRepository) and
+ * checked after Google sign-in. Only a salted SHA-256 hash of the password is
+ * ever stored. This is a local convenience lock, not a substitute for the
+ * Google OAuth + allowed-email check that actually guards the data.
  */
-
-const APP_USERNAME = import.meta.env.VITE_APP_USERNAME ?? '';
-const APP_PASSWORD = import.meta.env.VITE_APP_PASSWORD ?? '';
 
 const SESSION_KEY = 'spendflow.local_auth';
 
-export function isLocalAuthConfigured(): boolean {
-  return Boolean(APP_USERNAME && APP_PASSWORD);
+export interface StoredCredentials {
+  username: string;
+  passwordHash: string;
+  salt: string;
+}
+
+function toHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export function generateSalt(): string {
+  return toHex(crypto.getRandomValues(new Uint8Array(16)));
+}
+
+export async function hashPassword(password: string, salt: string): Promise<string> {
+  const data = new TextEncoder().encode(`${salt}:${password}`);
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return toHex(new Uint8Array(digest));
+}
+
+export async function createCredentials(
+  username: string,
+  password: string,
+): Promise<StoredCredentials> {
+  const salt = generateSalt();
+  return { username: username.trim(), salt, passwordHash: await hashPassword(password, salt) };
+}
+
+/** Checks the entered credentials against the stored ones, without changing any state. */
+export async function verifyCredentials(
+  stored: StoredCredentials,
+  username: string,
+  password: string,
+): Promise<boolean> {
+  if (username.trim() !== stored.username) return false;
+  return (await hashPassword(password, stored.salt)) === stored.passwordHash;
 }
 
 export function isLocallyAuthenticated(): boolean {
@@ -23,24 +55,14 @@ export function isLocallyAuthenticated(): boolean {
   }
 }
 
-/** Checks the given credentials without changing any stored state. */
-export function verifyLocalCredentials(username: string, password: string): boolean {
-  if (!isLocalAuthConfigured()) return false;
-  return username.trim() === APP_USERNAME.trim() && password.trim() === APP_PASSWORD.trim();
-}
-
-/** Checks the credentials and, if they match, remembers this for the browser tab's session. */
-export function authenticateLocally(username: string, password: string): boolean {
-  const matched = verifyLocalCredentials(username, password);
-  if (matched) {
-    try {
-      sessionStorage.setItem(SESSION_KEY, 'true');
-    } catch {
-      // sessionStorage unavailable (e.g. a strict private-browsing mode) —
-      // the caller's own in-memory state still gates the current render.
-    }
+/** Remembers a successful login for the browser tab's session. */
+export function markLocallyAuthenticated(): void {
+  try {
+    sessionStorage.setItem(SESSION_KEY, 'true');
+  } catch {
+    // sessionStorage unavailable (e.g. a strict private-browsing mode) —
+    // the caller's own in-memory state still gates the current render.
   }
-  return matched;
 }
 
 export function signOutLocally(): void {

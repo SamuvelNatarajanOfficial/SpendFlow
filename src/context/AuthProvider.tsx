@@ -19,8 +19,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return unsubscribe;
   }, []);
 
-  // Ends both steps — the local gate and the Google session — landing back
-  // on the static login screen. Distinct from the plain `signOut` below
+  // Ends both steps — the optional local lock and the Google session — landing
+  // back on the Google sign-in screen. Distinct from the plain `signOut` below
   // (which `AccessDeniedScreen` uses to retry with a different Google
   // account): that one shouldn't force re-entering the static password just
   // to pick a different account.

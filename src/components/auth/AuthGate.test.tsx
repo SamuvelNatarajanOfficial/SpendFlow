@@ -3,15 +3,17 @@ import userEvent from '@testing-library/user-event';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ReactNode } from 'react';
 import { AuthContext, type AuthContextValue } from '../../context/AuthContext';
+import { createCredentials } from '../../services/localAuth';
+import { PROTECTION_OFF } from '../../services/googleSheets/repositories/authRepository';
 import { AuthGate } from './AuthGate';
 
-const isLocallyAuthenticated = vi.fn();
-const authenticateLocally = vi.fn();
+const getAuthConfig = vi.fn();
 
-vi.mock('../../services/localAuth', () => ({
-  isLocallyAuthenticated: () => isLocallyAuthenticated(),
-  authenticateLocally: (username: string, password: string) =>
-    authenticateLocally(username, password),
+vi.mock('../../services/googleSheets/repositories/authRepository', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('../../services/googleSheets/repositories/authRepository')
+  >()),
+  authRepository: { get: () => getAuthConfig(), save: vi.fn() },
 }));
 
 function renderWithAuth(
@@ -35,53 +37,16 @@ const baseAuth: AuthContextValue = {
 };
 
 describe('AuthGate', () => {
+  beforeEach(() => {
+    sessionStorage.clear();
+    getAuthConfig.mockResolvedValue(PROTECTION_OFF);
+  });
+
   afterEach(() => {
     vi.clearAllMocks();
   });
 
-  describe('the static local login gate', () => {
-    beforeEach(() => {
-      isLocallyAuthenticated.mockReturnValue(false);
-    });
-
-    it('shows the login form before anything else, regardless of Google auth status', () => {
-      renderWithAuth({ ...baseAuth, status: 'authorized', email: 'me@example.com' });
-
-      expect(screen.getByLabelText(/username/i)).toBeInTheDocument();
-      expect(screen.getByLabelText(/password/i)).toBeInTheDocument();
-      expect(screen.queryByText('App content')).not.toBeInTheDocument();
-    });
-
-    it('moves past the gate once the entered credentials are accepted', async () => {
-      authenticateLocally.mockReturnValue(true);
-      renderWithAuth({ ...baseAuth, status: 'authorized', email: 'me@example.com' });
-
-      await userEvent.type(screen.getByLabelText(/username/i), 'admin');
-      await userEvent.type(screen.getByLabelText(/password/i), 'secret');
-      await userEvent.click(screen.getByRole('button', { name: /log in/i }));
-
-      expect(authenticateLocally).toHaveBeenCalledWith('admin', 'secret');
-      expect(screen.getByText('App content')).toBeInTheDocument();
-    });
-
-    it('shows an error and stays on the login form when the credentials are rejected', async () => {
-      authenticateLocally.mockReturnValue(false);
-      renderWithAuth({ ...baseAuth, status: 'authorized' });
-
-      await userEvent.type(screen.getByLabelText(/username/i), 'admin');
-      await userEvent.type(screen.getByLabelText(/password/i), 'wrong');
-      await userEvent.click(screen.getByRole('button', { name: /log in/i }));
-
-      expect(screen.getByText(/incorrect username or password/i)).toBeInTheDocument();
-      expect(screen.queryByText('App content')).not.toBeInTheDocument();
-    });
-  });
-
-  describe('Google sign-in, once past the local gate', () => {
-    beforeEach(() => {
-      isLocallyAuthenticated.mockReturnValue(true);
-    });
-
+  describe('Google sign-in', () => {
     it('shows a sign-in button when signed out', () => {
       renderWithAuth({ ...baseAuth, status: 'signed-out' });
       expect(
@@ -110,20 +75,84 @@ describe('AuthGate', () => {
       expect(screen.queryByText('App content')).not.toBeInTheDocument();
     });
 
-    it('does not render the app for a denied user even if children are provided', () => {
-      renderWithAuth({ ...baseAuth, status: 'denied', email: 'nope@example.com' });
-      expect(screen.queryByText('App content')).not.toBeInTheDocument();
-    });
-
-    it('renders the app once authorized', () => {
-      renderWithAuth({ ...baseAuth, status: 'authorized', email: 'me@example.com' });
-      expect(screen.getByText('App content')).toBeInTheDocument();
-    });
-
     it('shows a connection error screen with a retry action', () => {
       renderWithAuth({ ...baseAuth, status: 'error', error: 'Script failed to load.' });
       expect(screen.getByText('Script failed to load.')).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
+    });
+  });
+
+  describe('optional username/password protection', () => {
+    const authorized: AuthContextValue = {
+      ...baseAuth,
+      status: 'authorized',
+      email: 'me@example.com',
+    };
+
+    it('opens the app with no login by default', async () => {
+      renderWithAuth(authorized);
+
+      expect(await screen.findByText('App content')).toBeInTheDocument();
+      expect(screen.queryByLabelText(/username/i)).not.toBeInTheDocument();
+    });
+
+    it('asks for a login when protection is enabled in the sheet', async () => {
+      getAuthConfig.mockResolvedValue({
+        enabled: true,
+        ...(await createCredentials('admin', 'secret')),
+      });
+      renderWithAuth(authorized);
+
+      expect(await screen.findByLabelText(/username/i)).toBeInTheDocument();
+      expect(screen.queryByText('App content')).not.toBeInTheDocument();
+    });
+
+    it('lets the user in with the right credentials', async () => {
+      getAuthConfig.mockResolvedValue({
+        enabled: true,
+        ...(await createCredentials('admin', 'secret')),
+      });
+      renderWithAuth(authorized);
+
+      await userEvent.type(await screen.findByLabelText(/username/i), 'admin');
+      await userEvent.type(screen.getByLabelText(/password/i), 'secret');
+      await userEvent.click(screen.getByRole('button', { name: /log in/i }));
+
+      expect(await screen.findByText('App content')).toBeInTheDocument();
+    });
+
+    it('rejects wrong credentials and stays on the login form', async () => {
+      getAuthConfig.mockResolvedValue({
+        enabled: true,
+        ...(await createCredentials('admin', 'secret')),
+      });
+      renderWithAuth(authorized);
+
+      await userEvent.type(await screen.findByLabelText(/username/i), 'admin');
+      await userEvent.type(screen.getByLabelText(/password/i), 'wrong');
+      await userEvent.click(screen.getByRole('button', { name: /log in/i }));
+
+      expect(await screen.findByText(/incorrect username or password/i)).toBeInTheDocument();
+      expect(screen.queryByText('App content')).not.toBeInTheDocument();
+    });
+
+    it('skips the login again within the same browser session', async () => {
+      sessionStorage.setItem('spendflow.local_auth', 'true');
+      getAuthConfig.mockResolvedValue({
+        enabled: true,
+        ...(await createCredentials('admin', 'secret')),
+      });
+      renderWithAuth(authorized);
+
+      expect(await screen.findByText('App content')).toBeInTheDocument();
+    });
+
+    it('shows an error rather than opening the app if the Auth tab cannot be read', async () => {
+      getAuthConfig.mockRejectedValue(new Error('boom'));
+      renderWithAuth(authorized);
+
+      expect(await screen.findByRole('button', { name: /try again/i })).toBeInTheDocument();
+      expect(screen.queryByText('App content')).not.toBeInTheDocument();
     });
   });
 });

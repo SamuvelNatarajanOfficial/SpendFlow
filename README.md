@@ -22,9 +22,9 @@ third-party server.
 
 ## 2. Features
 
-- **Google sign-in, single-user by design.** Only the one Google account you
-  configure can ever see data — every other account is turned away with an
-  explicit "Access denied" screen.
+- **No login by default, optional protection.** The app opens straight away.
+  Turn on a username/password in Settings if you want one — it's stored in
+  your Google Sheet's `Auth` tab and checked by your own Apps Script.
 - **Recurring presets with start/end months.** A loan with a 6-month term and
   an indefinite rent payment use the exact same mechanism — just set
   (or omit) an end month. No special-cased "loan" logic anywhere.
@@ -41,26 +41,24 @@ third-party server.
   purpose-built mobile cards and bottom navigation, not a shrunk desktop UI.
 - **Installable PWA.** Add SpendFlow to your phone's home screen for a
   full-screen, app-like launch — same app, same URL, no app store.
-- **No backend.** Static React app + Google Sheets API + Google Identity
-  Services. Deploys as plain static files.
+- **No server to host.** Static React app + a small Google Apps Script in
+  your own sheet. Deploys as plain static files.
 
 ## 3. Architecture
 
 ```
 Browser (React SPA)
-  │
-  ├─ Google Identity Services  — OAuth sign-in, access token (in-memory only)
-  │
-  └─ Google Sheets API         — all reads/writes, using that access token
+  │  POST (JSON)
+  └─ Google Apps Script web app  — bound to your sheet, runs as you
          │
-         └─ Your Google Sheet  — the only datastore; you own and control it
+         └─ Your Google Sheet    — the only datastore; you own and control it
 ```
 
-There is no server component. The app is a static bundle served by GitHub
-Pages; all authentication and data access happens directly from the browser
-to Google's APIs using the signed-in user's own OAuth token. See
-[Security notes](#security-notes) for what that does and doesn't protect
-against.
+The app is a static bundle served by GitHub Pages. All data access goes
+through the Apps Script web app you deploy from your own spreadsheet
+(`docs/apps-script/Code.gs`), which reads and writes the sheet as you — so
+the browser needs no Google sign-in. See [Security notes](#security-notes)
+for what that does and doesn't protect against.
 
 Inside the app, the finance logic is deliberately split into a **pure layer**
 and a **thin impure layer**:
@@ -87,73 +85,37 @@ or the Sheets client directly.
 | UI      | React 19, TypeScript (strict), Vite                        |
 | Styling | Tailwind CSS v4 (`@theme` tokens), Lucide icons            |
 | Routing | React Router (`HashRouter`, for static-host compatibility) |
-| Auth    | Google Identity Services (OAuth 2.0 token client)          |
-| Data    | Google Sheets API v4                                       |
+| Auth    | Optional username/password, checked by Apps Script         |
+| Data    | Google Sheets via a Google Apps Script web app             |
 | Quality | ESLint (flat config) + Prettier                            |
 | Testing | Vitest + Testing Library                                   |
 | PWA     | `vite-plugin-pwa` (Workbox-generated service worker)       |
 | Hosting | GitHub Pages, deployed via GitHub Actions                  |
 
-## 5. Google Cloud Setup
+## 5. Apps Script Setup
 
-1. Go to [Google Cloud Console](https://console.cloud.google.com/) and
-   create a new project (or reuse a personal one).
-2. **APIs & Services → Library** → enable the **Google Sheets API**.
-3. **APIs & Services → OAuth consent screen**:
-   - User type: **External**.
-   - Fill in app name, support email, developer contact.
-   - Scopes: `.../auth/spreadsheets` and `.../auth/userinfo.email`.
-   - **Test users**: add your own Google account. While the app stays in
-     "Testing" publishing status, only listed test users can sign in at
-     all — this is what actually enforces "single user" at the Google
-     layer, on top of the app's own email check.
-4. **APIs & Services → Credentials → Create Credentials → OAuth client ID**:
-   - Application type: **Web application**.
-   - **Authorized JavaScript origins**: add every origin you'll run the app
-     from, e.g. `http://localhost:5173` for local dev and
-     `https://<your-username>.github.io` for production (see
-     [Google OAuth Setup](#6-google-oauth-setup) below for the exact value).
-   - No redirect URI is needed — this app uses the token-client (implicit)
-     flow, not a redirect-based one.
-   - Copy the generated **Client ID**.
+1. Create the spreadsheet (see [section 7](#7-google-sheets-setup)).
+2. In the sheet: **Extensions → Apps Script**. Delete the sample code and
+   paste in the contents of [docs/apps-script/Code.gs](docs/apps-script/Code.gs).
+3. **Deploy → New deployment → type: Web app**:
+   - **Execute as:** _Me_
+   - **Who has access:** _Anyone_
+4. Authorize the script when prompted, then copy the **Web app URL**
+   (ends in `/exec`) into `VITE_APPS_SCRIPT_URL`.
+5. After any later edit to `Code.gs`, use **Deploy → Manage deployments →
+   Edit → New version** so the live URL picks up the change.
 
-## 6. Google OAuth Setup
+## 6. App Protection
 
-This app uses Google Identity Service's **token client**, requesting the
-`spreadsheets` and `userinfo.email` scopes together in one grant — one
-consent gives both Sheets API access and the email needed for the allow-list
-check.
+By default the app opens with no login. In **Settings → App Protection** you
+can enable a username/password. It is saved in the sheet's `Auth` tab (the
+password as a salted SHA-256 hash; the tab is created for you if missing) and
+verified by the Apps Script, which then issues a session token that the app
+keeps for the browser tab's session and sends with every request. With
+protection on, the script rejects every data request without a valid token.
 
-**The exact origin to register** in _Authorized JavaScript origins_ for a
-GitHub Pages deployment is the origin only, **without** a path:
-
-```
-https://<your-github-username>.github.io
-```
-
-(Not `https://<your-username>.github.io/SpendFlow` — origins never include a
-path. Add `http://localhost:5173` as a second origin for local development.)
-
-Authentication flow summary (see `src/services/googleSheets/auth.ts`):
-
-1. User clicks "Sign in with Google" → GIS token client requests the token.
-2. The app fetches `userinfo.email` with that token.
-3. The email is compared against `VITE_ALLOWED_GOOGLE_EMAIL`
-   (case/whitespace-insensitive).
-4. **Match** → `authorized`, the app loads. **No match** → the token is
-   immediately revoked and the user sees "Access denied. This application
-   is private."
-5. The access token lives only in an in-memory module variable — never
-   localStorage/sessionStorage. A page refresh clears it; signing in again
-   is required. A `401` from the Sheets API triggers the same sign-out path
-   with a "session expired" message.
-
-**Optional app protection.** By default the app opens straight after Google
-sign-in. In Settings → App Protection you can enable a username/password;
-it's saved in the sheet's `Auth` tab (password stored as a salted SHA-256
-hash) and asked for after Google sign-in, once per browser tab session.
-It's a convenience lock, not real authentication — the Google sign-in and
-allowed-email check are what protect your data.
+"Anyone" access in step 3 above only means the URL is reachable without a
+Google login — the script itself decides what to serve.
 
 ## 7. Google Sheets Setup
 
@@ -165,24 +127,21 @@ full column-by-column reference; `docs/Sample-structure/SpendFlow Data.xlsx`
 is a ready-made template with the headers and formatting already set up —
 copy its tabs into your Google Sheet, or recreate them by hand.
 
-No sharing step is needed: the app reads/writes using your own OAuth token,
-not a service account, so owning the sheet with the same Google account you
-sign in with is sufficient.
+No sharing step is needed: the Apps Script runs as you, the sheet's owner.
+**Keep the sheet itself private (only you).**
 
 ## 8. Environment Variables
 
 Copy `.env.example` to `.env.local` and fill in:
 
 ```bash
-VITE_GOOGLE_CLIENT_ID=      # OAuth client ID from step 5
-VITE_GOOGLE_SHEET_ID=       # spreadsheet ID from its URL (step 7)
-VITE_ALLOWED_GOOGLE_EMAIL=  # the one Google account allowed to use this app
+VITE_APPS_SCRIPT_URL=       # Apps Script web app URL (step 4 of Apps Script Setup)
 ```
 
 `.env`, `.env.local`, and all `.env.*` variants are git-ignored (only
 `.env.example` is tracked) — never commit real values. For the GitHub Actions
-deployment, the same three values are stored as **repository secrets**
-instead (see [GitHub Pages Deployment](#11-github-pages-deployment)).
+deployment, the same value is stored as a **repository secret** instead (see
+[GitHub Pages Deployment](#11-github-pages-deployment)).
 
 Vite only reads env files at startup — restart `npm run dev` after editing
 `.env.local`.
@@ -226,10 +185,8 @@ locally (Vite serves it with the same base path).
 
 1. **Push this repository to GitHub** as `SpendFlow` under your account.
 2. **Repo Settings → Secrets and variables → Actions → New repository
-   secret**, add all three:
-   - `VITE_GOOGLE_CLIENT_ID`
-   - `VITE_GOOGLE_SHEET_ID`
-   - `VITE_ALLOWED_GOOGLE_EMAIL`
+   secret**, add:
+   - `VITE_APPS_SCRIPT_URL`
 3. **Repo Settings → Pages → Build and deployment → Source**: select
    **GitHub Actions** (not "Deploy from a branch").
 4. Push to `main`. `.github/workflows/deploy.yml` runs automatically:
@@ -242,36 +199,22 @@ locally (Vite serves it with the same base path).
    https://<your-github-username>.github.io/SpendFlow/
    ```
 
-6. Go back to [Google Cloud Console credentials](https://console.cloud.google.com/apis/credentials)
-   and add that origin (`https://<your-github-username>.github.io`, no
-   path) to the OAuth client's Authorized JavaScript origins if you haven't
-   already — sign-in will fail with `redirect_uri_mismatch`-style errors
-   until that's done.
-
 You can also trigger a deploy manually from the Actions tab
 (`workflow_dispatch`) without pushing a new commit.
 
 ## 12. Troubleshooting
 
-**"Access blocked: has not completed the Google verification process" /
-Error 403: access_denied**
-The OAuth consent screen is in Testing mode and your account isn't on its
-test-user list yet. Google Cloud Console → OAuth consent screen → Test
-users → add your email. This is a Google-side block, before the app's own
-allow-list check ever runs.
+**"Missing VITE_APPS_SCRIPT_URL" / "unexpected response" / network error on load**
+Check that `VITE_APPS_SCRIPT_URL` is set (it's baked in at **build** time, so
+a deploy needs the repository secret), that the deployment's access is
+**Anyone** and it executes as **Me**, and that you redeployed a **new
+version** after editing `Code.gs`. Opening the URL in a browser should show
+`SpendFlow script is running.`
 
-**Signed in successfully but see "Access denied. This application is
-private."**
-The email you authenticated with doesn't match `VITE_ALLOWED_GOOGLE_EMAIL`
-exactly (this check is case/whitespace-insensitive but otherwise exact).
-Check both values, and remember this env var is baked in at **build** time —
-changing it requires a rebuild/redeploy, not just an env file edit.
-
-**Sign-in works locally but fails on the deployed site (or vice versa)**
-The two environments need separate entries in _Authorized JavaScript
-origins_: `http://localhost:5173` for local dev, `https://<username>.github.io`
-(origin only, no path) for production. Missing either one breaks sign-in in
-that environment specifically.
+**"The \"Auth\" tab was not found" or another missing tab**
+Every tab in [docs/GOOGLE_SHEETS_SETUP.md](docs/GOOGLE_SHEETS_SETUP.md) must
+exist with that exact spelling. The `Auth` tab is created automatically the
+first time you save App Protection.
 
 **Blank page / 404 after a hard refresh or a shared deep link**
 Shouldn't happen — the app uses `HashRouter`, so all routes live after a
@@ -290,12 +233,11 @@ makes every asset request 404, so the JS bundle never loads and the page
 stays blank with no visible error (check dev tools → Network tab for 404s
 on `/assets/...` to confirm this is the cause).
 
-**"Your Google session has expired. Please sign in again."**
-Normal — the in-memory access token doesn't survive a page refresh, or
-Google's token lifetime (~1 hour) elapsed. Sign in again.
+**"Your session expired. Please log in again."**
+With protection on, a login lasts up to 6 hours. Log in again.
 
 **"The spreadsheet is unavailable" / "A required sheet tab was not found"**
-Double-check `VITE_GOOGLE_SHEET_ID` against the ID in your sheet's URL, and
+Make sure the Apps Script is bound to the right spreadsheet, and
 that every tab name in [docs/GOOGLE_SHEETS_SETUP.md](docs/GOOGLE_SHEETS_SETUP.md)
 exists with that exact spelling (tab names and column order are
 load-bearing — the app reads by position, not by header text).
@@ -365,39 +307,21 @@ See [Financial Data Safety](#financial-data-safety) for the full reasoning.
 
 ## Security Notes
 
-- **Nothing server-side holds your data or credentials.** The app is a
-  static bundle; every API call goes straight from your browser to Google
-  using your own OAuth token.
-- **The access token is never persisted** — no localStorage, no
-  sessionStorage, no cookies. It lives in a module-level variable and is
-  gone on refresh.
-- **`VITE_GOOGLE_CLIENT_ID`, `VITE_GOOGLE_SHEET_ID`, and
-  `VITE_ALLOWED_GOOGLE_EMAIL` are compiled into the public JS bundle** —
-  unavoidable for a backend-less static SPA, and not a vulnerability by
-  itself:
-  - The Client ID is a public OAuth identifier by design (there's no client
-    secret in this flow — a secret would be the actual sensitive thing, and
-    this app never has one).
-  - The Sheet ID alone grants no access — Google Sheets API still enforces
-    the sheet's own sharing permissions and requires a valid OAuth token.
-    **Keep your sheet's sharing setting private** (only you), not "anyone
-    with the link."
-  - The allow-listed email is a single string; knowing it doesn't help an
-    attacker, since Google's own account system is what's being
-    authenticated against.
-- **Two independent gates stand between a stranger and your data**: (1)
-  Google's OAuth consent screen only allows listed test users to complete
-  sign-in at all, and (2) the app's own post-sign-in email check. Either one
-  failing denies access.
-- **App protection credentials live in your sheet's `Auth` tab**, not the
-  bundle — only a salted hash of the password is stored. Anyone with edit
-  access to the sheet can overwrite it, so keep the sheet private.
-- **Secrets that must never be committed**: a real `.env`/`.env.local`, any
-  OAuth client _secret_ (this app's flow doesn't use one, but double-check
-  before adding any feature that would), access/refresh tokens, and real
-  financial data. `.gitignore` excludes all `.env*` except `.env.example`.
-- **Repository secrets, not committed files**, hold these same three values
-  for CI — see [GitHub Pages Deployment](#11-github-pages-deployment).
+- **The Apps Script URL is the key to your data when protection is off.**
+  It is compiled into the public JS bundle, so anyone who finds it can read
+  and write your sheet. Enable App Protection in Settings if the deployed
+  site is public, and keep the sheet itself private (only you).
+- **With protection on**, the script rejects every data request that lacks a
+  session token from a successful login. Failed logins are rate-limited
+  (10 failures, then a 10-minute lockout), and sessions expire after 6 hours.
+- **Passwords are stored as a salted SHA-256 hash** in the `Auth` tab, never in
+  plain text and never in the bundle. Anyone with edit access to the sheet
+  can overwrite that tab, so keep the sheet private.
+- **Secrets that must never be committed**: a real `.env`/`.env.local` and
+  real financial data. `.gitignore` excludes all `.env*` except
+  `.env.example`.
+- **A repository secret, not a committed file**, holds the Apps Script URL for
+  CI — see [GitHub Pages Deployment](#11-github-pages-deployment).
 
 ## Financial Data Safety
 
@@ -413,8 +337,8 @@ out of sync with the sheet.
 
 The PWA's service worker (added for installability — see
 [Mobile / PWA](#mobile--pwa)) only precaches the **static app shell**: the
-built JS/CSS/HTML and icons. It has **zero runtime-caching rules for any
-Google API** — every Sheets/Auth request always goes to the live network,
+built JS/CSS/HTML and icons. It has **zero runtime-caching rules for the
+Apps Script** — every data request always goes to the live network,
 every time, with no exceptions. Concretely: the service worker can make the
 app's UI _open_ while offline, but it cannot and does not make a "Mark Paid"
 or any other write look like it succeeded without Google actually confirming
@@ -423,25 +347,20 @@ a service worker at all.
 
 ## Known Limitations
 
-- **Single user only**, enforced by both Google's test-user list and the
-  app's own allow-list check — not a multi-tenant product.
-- **No offline support** — an active, authorized Google session is required
+- **Single user only** — one sheet, one optional login; not a multi-tenant
+  product.
+- **No offline support** — a live connection to the Apps Script is required
   for every data operation (see Financial Data Safety above).
 - **No server-side validation** — all validation is client-side; a
   determined user editing the Google Sheet directly could enter malformed
   data (the app surfaces this as a friendly "couldn't read this row" error
   rather than crashing, but won't fix it for you).
-- **OAuth consent screen stays in "Testing" mode** by design (that's what
-  enforces single-user access) — Google expires test-user grants after a
-  rolling window, occasionally requiring re-consent; this is expected, not
-  a bug.
-- **Access tokens don't survive a refresh** — re-authentication is required
-  once per browser session, by design (see Security Notes).
+- **The login is a convenience lock** — see Security Notes for what it does
+  and doesn't protect.
 
 ## How to Use SpendFlow Every Month
 
-1. **Open the app** and sign in with your Google account (if not already
-   signed in).
+1. **Open the app** (and log in, if you turned on App Protection).
 2. **Check the month** shown in the Dashboard's month selector; use the
    arrows to navigate to the month you want (past months stay fully
    accessible — nothing is ever auto-deleted).

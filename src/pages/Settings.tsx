@@ -3,7 +3,6 @@ import { CheckCircle2, XCircle } from 'lucide-react';
 import { Select } from '../components/ui/Select';
 import { Button } from '../components/ui/Button';
 import { InstallPwaSection } from '../components/shared/InstallPwaSection';
-import { useAuth } from '../context/AuthContext';
 import { settingsRepository } from '../services/googleSheets/repositories/settingsRepository';
 import { getFriendlyErrorMessage } from '../services/googleSheets/errors';
 import { AppProtectionSection } from '../components/settings/AppProtectionSection';
@@ -17,7 +16,6 @@ type ConnectionTestState =
   | { status: 'error'; message: string };
 
 export function Settings() {
-  const { email, signOutCompletely } = useAuth();
   const [connectionTest, setConnectionTest] = useState<ConnectionTestState>({
     status: 'idle',
   });
@@ -34,18 +32,6 @@ export function Settings() {
 
   return (
     <div className="flex flex-col gap-6">
-      <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-sm">
-        <h2 className="text-base font-semibold text-text">Google Account</h2>
-        <p className="text-sm text-text">
-          Signed in as <span className="font-medium">{email}</span>
-        </p>
-        <div>
-          <Button variant="secondary" size="sm" onClick={signOutCompletely}>
-            Sign out
-          </Button>
-        </div>
-      </section>
-
       <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-sm">
         <h2 className="text-base font-semibold text-text">Google Sheets Connection</h2>
         <p className="text-sm text-muted">

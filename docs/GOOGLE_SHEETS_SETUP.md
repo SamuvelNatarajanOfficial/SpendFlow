@@ -1,8 +1,8 @@
 # Google Sheet Structure
 
-The exact tab and column layout SpendFlow expects. For Google Cloud / OAuth
+The exact tab and column layout SpendFlow expects. For the Apps Script
 setup and environment variables, see the main
-[README](../README.md#5-google-cloud-setup).
+[README](../README.md#5-apps-script-setup).
 
 ## Create the spreadsheet
 
@@ -12,14 +12,13 @@ setup and environment variables, see the main
    row 1. Column order matters — the app reads/writes by position, not by
    header name. (`docs/Sample-structure/SpendFlow Data.xlsx` has these tabs
    pre-built if you'd rather copy them than type them out.)
-4. Copy the spreadsheet ID from its URL for `VITE_GOOGLE_SHEET_ID`:
-   `https://docs.google.com/spreadsheets/d/<SPREADSHEET_ID>/edit`
+4. Add the Apps Script from this sheet (**Extensions → Apps Script**,
+   code in `docs/apps-script/Code.gs`) and deploy it as a web app — see the
+   README's Apps Script Setup.
 5. Leave every tab with only its header row for now — the app treats a tab
    with zero data rows as "empty", not an error.
 
-No sharing step is required: the app reads/writes with your own OAuth token,
-not a service account, so owning the sheet with the account you sign in with
-is enough. **Keep its sharing setting private (only you)** — see the
+No sharing step is required: the Apps Script runs as you, the sheet's owner. **Keep its sharing setting private (only you)** — see the
 README's Security Notes for why.
 
 ### `Settings` (single row of app-wide settings)
@@ -121,9 +120,9 @@ mechanism as rent or any other recurring item.
 
 ### `Auth` (optional app protection — one row, managed from Settings)
 
-Create the tab with just the header row. Leave it empty (or omit the tab) and
-the app opens without a login. Enable protection in **Settings → App
-Protection** and the app fills row 2 for you.
+Optional — the tab is created for you the first time you save **Settings →
+App Protection**. Leave it empty (or omit it) and the app opens without a
+login.
 
 | Column         | Type            | Notes                                    |
 | -------------- | --------------- | ---------------------------------------- |

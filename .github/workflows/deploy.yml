@@ -40,15 +40,11 @@ jobs:
       - name: Build
         run: npm run build
         env:
-          # These end up compiled into the static bundle, as they must for a
-          # backend-less SPA. They are not secrets in the traditional sense —
-          # VITE_GOOGLE_CLIENT_ID is a public OAuth client identifier, and the
-          # real access boundary is Google's test-user allow-list plus this
-          # app's own email check at sign-in, not the secrecy of these values.
-          # See README.md "Security notes" for the full reasoning.
-          VITE_GOOGLE_CLIENT_ID: ${{ secrets.VITE_GOOGLE_CLIENT_ID }}
-          VITE_GOOGLE_SHEET_ID: ${{ secrets.VITE_GOOGLE_SHEET_ID }}
-          VITE_ALLOWED_GOOGLE_EMAIL: ${{ secrets.VITE_ALLOWED_GOOGLE_EMAIL }}
+          # Compiled into the static bundle, as it must be for a backend-less
+          # SPA. It is the URL of your Apps Script web app — treat it as
+          # private, since with protection off anyone holding it can reach
+          # the sheet. See README.md "Security notes".
+          VITE_APPS_SCRIPT_URL: ${{ secrets.VITE_APPS_SCRIPT_URL }}
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

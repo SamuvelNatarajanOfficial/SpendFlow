@@ -14,7 +14,7 @@ export function ConnectionErrorScreen({ message, onRetry }: ConnectionErrorScree
       </div>
       <div className="flex flex-col gap-1">
         <h1 className="text-xl font-semibold text-text">
-          Couldn&apos;t connect to Google
+          Couldn&apos;t connect to your sheet
         </h1>
         <p className="max-w-sm text-sm text-muted">{message}</p>
       </div>

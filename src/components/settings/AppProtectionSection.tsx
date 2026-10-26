@@ -3,7 +3,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { authRepository } from '../../services/googleSheets/repositories/authRepository';
 import { getFriendlyErrorMessage } from '../../services/googleSheets/errors';
-import { createCredentials, markLocallyAuthenticated } from '../../services/localAuth';
+import { clearSessionToken, getSessionToken } from '../../services/localAuth';
 
 type Notice = { kind: 'success' | 'error'; message: string } | null;
 
@@ -27,7 +27,7 @@ export function AppProtectionSection() {
         if (cancelled) return;
         setEnabled(config.enabled);
         setUsername(config.username);
-        setHasSavedPassword(Boolean(config.passwordHash));
+        setHasSavedPassword(config.hasPassword);
         setLoaded(true);
       })
       .catch((error: unknown) => {
@@ -56,16 +56,9 @@ export function AppProtectionSection() {
 
     setSaving(true);
     try {
-      const existing = await authRepository.get();
-      const credentials = password
-        ? await createCredentials(trimmedUsername, password)
-        : { ...existing, username: trimmedUsername };
-      await authRepository.save({ enabled, ...credentials });
+      await authRepository.save({ enabled, username: trimmedUsername, password });
       setPassword('');
-      setHasSavedPassword(Boolean(credentials.passwordHash));
-      // The person just configured this, so don't lock them out of the
-      // session they're already in — the login applies from the next visit.
-      if (enabled) markLocallyAuthenticated();
+      setHasSavedPassword(hasSavedPassword || Boolean(password));
       setNotice({
         kind: 'success',
         message: enabled
@@ -79,13 +72,18 @@ export function AppProtectionSection() {
     }
   }
 
+  function handleLogOut() {
+    clearSessionToken();
+    window.location.reload();
+  }
+
   return (
     <section className="flex flex-col gap-4 rounded-xl border border-border bg-card p-5 shadow-sm">
       <h2 className="text-base font-semibold text-text">App Protection</h2>
       <p className="text-sm text-muted">
-        Optionally ask for a username and password when the app opens. The username and a
-        hashed password are saved in the <span className="font-medium">Auth</span> tab of your
-        Google Sheet. Off by default.
+        Optionally ask for a username and password when the app opens. They are saved in the{' '}
+        <span className="font-medium">Auth</span> tab of your Google Sheet (the password as a
+        salted hash). Off by default.
       </p>
       <form onSubmit={(event) => void handleSave(event)} className="flex flex-col gap-4">
         <label className="flex items-center gap-2 text-sm font-medium text-text">
@@ -122,6 +120,11 @@ export function AppProtectionSection() {
           <Button type="submit" variant="secondary" size="sm" disabled={!loaded || saving}>
             {saving ? 'Saving…' : 'Save'}
           </Button>
+          {getSessionToken() && (
+            <Button type="button" variant="secondary" size="sm" onClick={handleLogOut}>
+              Log out
+            </Button>
+          )}
           {notice && (
             <span
               className={`text-sm ${notice.kind === 'success' ? 'text-regular' : 'text-overdue'}`}

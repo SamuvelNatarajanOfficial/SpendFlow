@@ -1,63 +1,46 @@
-import { appendRow, getSheetRows, updateRowByRowNumber } from '../sheets';
-import { MissingSheetError } from '../errors';
-import type { StoredCredentials } from '../../localAuth';
+import { callScript } from '../client';
+import { setSessionToken } from '../../localAuth';
 
-const SHEET_NAME = 'Auth';
-
-export interface AuthConfig extends StoredCredentials {
+export interface ProtectionConfig {
   enabled: boolean;
+  username: string;
+  /** Whether a password is already saved — the password itself is never sent back. */
+  hasPassword: boolean;
 }
 
-/** Protection is off by default — this is what an empty or missing Auth tab means. */
-export const PROTECTION_OFF: AuthConfig = {
-  enabled: false,
-  username: '',
-  passwordHash: '',
-  salt: '',
-};
-
-function fromRow(row: string[]): AuthConfig {
-  const [enabled = '', username = '', passwordHash = '', salt = ''] = row;
-  return {
-    enabled: enabled.trim().toUpperCase() === 'TRUE',
-    username,
-    passwordHash,
-    salt,
-  };
+export interface ProtectionUpdate {
+  enabled: boolean;
+  username: string;
+  /** Omit or leave empty to keep the saved password. */
+  password?: string;
 }
 
-function toRow(config: AuthConfig): string[] {
-  return [
-    config.enabled ? 'TRUE' : 'FALSE',
-    config.username,
-    config.passwordHash,
-    config.salt,
-    new Date().toISOString(),
-  ];
+/** Whether a login is required. Public — answered before anyone has logged in. */
+async function isEnabled(): Promise<boolean> {
+  const { enabled } = await callScript<{ enabled: boolean }>('authStatus');
+  return enabled;
+}
+
+/** Verifies the credentials on the server and, if they match, keeps the session token. */
+async function login(username: string, password: string): Promise<boolean> {
+  const result = await callScript<{ token: string | null }>('login', { username, password });
+  if (!result.token) return false;
+  setSessionToken(result.token);
+  return true;
+}
+
+async function get(): Promise<ProtectionConfig> {
+  return callScript<ProtectionConfig>('getAuth');
 }
 
 /**
- * The Auth tab holds at most one data row. A missing tab or empty row means
- * "no protection" — the app opens without a login unless the user turned it on.
+ * Saves the protection settings to the sheet's `Auth` tab (created if missing).
+ * Returns a fresh session token when protection is on, so the person who just
+ * set it up isn't immediately locked out of the session they're in.
  */
-async function get(): Promise<AuthConfig> {
-  try {
-    const { rows } = await getSheetRows(SHEET_NAME);
-    if (rows.length === 0) return PROTECTION_OFF;
-    return fromRow(rows[0]);
-  } catch (error) {
-    if (error instanceof MissingSheetError) return PROTECTION_OFF;
-    throw error;
-  }
+async function save(update: ProtectionUpdate): Promise<void> {
+  const result = await callScript<{ token: string | null }>('setAuth', { ...update });
+  if (result.token) setSessionToken(result.token);
 }
 
-async function save(config: AuthConfig): Promise<void> {
-  const { rows } = await getSheetRows(SHEET_NAME);
-  if (rows.length === 0) {
-    await appendRow(SHEET_NAME, toRow(config));
-  } else {
-    await updateRowByRowNumber(SHEET_NAME, 2, toRow(config));
-  }
-}
-
-export const authRepository = { get, save };
+export const authRepository = { isEnabled, login, get, save };

@@ -1,44 +1,63 @@
-import type { ReactNode } from 'react';
-import { useAuth } from '../../context/AuthContext';
-import { SignInScreen } from './SignInScreen';
-import { AccessDeniedScreen } from './AccessDeniedScreen';
+import { useEffect, useState, type ReactNode } from 'react';
+import { getSessionToken } from '../../services/localAuth';
+import { authRepository } from '../../services/googleSheets/repositories/authRepository';
+import { getFriendlyErrorMessage } from '../../services/googleSheets/errors';
+import { LocalLoginScreen } from './LocalLoginScreen';
 import { ConnectionErrorScreen } from './ConnectionErrorScreen';
-import { ProtectionGate } from './ProtectionGate';
 
 export interface AuthGateProps {
   children: ReactNode;
 }
 
+type GateState =
+  | { status: 'loading' }
+  | { status: 'open' }
+  | { status: 'locked' }
+  | { status: 'error'; message: string };
+
 /**
- * Gates the app behind Google sign-in and the single-user allow-list, which is
- * what grants Google Sheets access. Once authorized, an optional
- * username/password lock (off by default, configured in Settings) may apply.
+ * SpendFlow opens with no login by default. If the user enabled protection in
+ * Settings (stored in the sheet's `Auth` tab), a username/password is asked
+ * for first; the check itself happens in the Apps Script, not in the browser.
  */
 export function AuthGate({ children }: AuthGateProps) {
-  const { status, email, error, signIn, signOut } = useAuth();
+  const [state, setState] = useState<GateState>({ status: 'loading' });
 
-  switch (status) {
-    case 'idle':
+  useEffect(() => {
+    let cancelled = false;
+    authRepository
+      .isEnabled()
+      .then((enabled) => {
+        if (cancelled) return;
+        const needsLogin = enabled && !getSessionToken();
+        setState({ status: needsLogin ? 'locked' : 'open' });
+      })
+      .catch((error: unknown) => {
+        if (!cancelled) setState({ status: 'error', message: getFriendlyErrorMessage(error) });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  switch (state.status) {
+    case 'loading':
       return null;
-    case 'signed-out':
-    case 'authenticating':
-      return (
-        <SignInScreen
-          onSignIn={signIn}
-          error={error}
-          isAuthenticating={status === 'authenticating'}
-        />
-      );
-    case 'denied':
-      return <AccessDeniedScreen email={email} onSignOut={signOut} />;
     case 'error':
       return (
-        <ConnectionErrorScreen
-          message={error ?? 'Something went wrong while connecting to Google.'}
-          onRetry={() => window.location.reload()}
+        <ConnectionErrorScreen message={state.message} onRetry={() => window.location.reload()} />
+      );
+    case 'locked':
+      return (
+        <LocalLoginScreen
+          onSubmit={async (username, password) => {
+            const ok = await authRepository.login(username, password);
+            if (ok) setState({ status: 'open' });
+            return ok;
+          }}
         />
       );
-    case 'authorized':
-      return <ProtectionGate>{children}</ProtectionGate>;
+    case 'open':
+      return <>{children}</>;
   }
 }
